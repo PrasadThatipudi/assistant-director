@@ -1,0 +1,49 @@
+---
+description: LOGGING: Structured logging standards, levels, and PII redaction.
+globs: 
+triggers:
+  - logging
+  - logger
+  - observability
+---
+You are implementing a production-grade Logging Strategy.
+**Specialization:** Distributed Tracing, ELK/Splunk Optimization, and Site Reliability Engineering (SRE).
+**Goal:** Logs must be queryable data, not just text. They must support "Mean Time to Resolution" (MTTR) reduction.
+**Philosophy:** "Logs are for machines first, humans second. If it isn't structured, it doesn't exist."
+
+## The Structure (JSON First)
+**CRITICAL:** Do NOT generate unstructured text logs.
+* **Format:** All logs must be emitted as **Structured JSON** objects.
+* **Standard Schema:** Every log entry must contain:
+    * `timestamp`: ISO 8601 (UTC).
+    * `level`: Severity.
+    * `correlation_id`: The trace ID to link requests across services.
+    * `context`: A dictionary of relevant metadata (User ID, Tenant ID).
+    * `message`: A static, low-cardinality string template (e.g., "User login failed", NOT "User login failed for bob").
+
+## Log Level Discipline
+* **DEBUG:** High volume, strictly for local development. Disabled in Prod.
+* **INFO (The KPI Stream):** Significant "Lifecycle Events" only. (e.g., "Order Placed", "Payment Processed"). *These drive Business KPIs.*
+* **WARN:** Recoverable anomalies. The operation succeeded, but something was weird (e.g., "Retrying DB connection", "Deprecated API usage").
+* **ERROR:** Operation failed. Immediate action required.
+* **FATAL:** The application cannot continue (e.g., "Config missing", "Port binding failed").
+
+## Advanced Patterns
+
+### 1. The "Canonical Log Line"
+* **Rule:** Emit exactly **ONE** summary log at the end of every HTTP request/Background Job.
+* **Content:** Duration (ms), Status Code, Bytes In/Out, Route, User Agent.
+* **Why:** This allows calculating error rates and latency percentiles (p95, p99) without expensive aggregation.
+
+### 2. Context & Tracing
+* **Correlation:** You MUST extract `X-Request-ID` from headers and inject it into the logging context. If missing, generate one.
+* **Thread Safety:** Use Context storage (e.g., Python `contextvars`, Java `MDC`, Node `AsyncLocalStorage`) to ensure logs in async code carry the correct request context.
+
+### 3. Safety & PII Redaction
+* **The Blacklist:** NEVER log: Passwords, API Keys, Tokens, Credit Card Numbers.
+* **Masking:** Implement a middleware or serializer hook that automatically scrubs specific field names (`password`, `secret`) or masks patterns (Credit Cards) before writing the JSON.
+
+## Phase 4: Output Format
+1.  **Logging Configuration:** Code to setup the logger (e.g., Python `structlog`, Node `Winston/Pino`, Java `Log4j2/SLF4J`).
+2.  **Sample Output:** A JSON block demonstrating a "Canonical Log Line" and an "Error Log" with stack trace.
+3.  **Performance Note:** Ensure the logger is configured for **Asynchronous** writing to avoid blocking the main thread.

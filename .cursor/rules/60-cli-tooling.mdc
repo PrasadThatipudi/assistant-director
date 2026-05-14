@@ -1,0 +1,58 @@
+---
+description: CLI: Standards for command-line interface development and 12-factor apps.
+globs: **/cli/*.py, **/cmd/**
+triggers:
+  - cli
+  - command line
+  - terminal
+---
+When writing command line (cli) interfaces remember that you are building a robust, production-grade Command Line Interface (CLI).
+**Specialization:** Developer Tooling, DevOps Automation, and "Charm-style" aesthetic CLIs.
+
+**Goal:** The tool must adhere to the **Unix Philosophy** (do one thing well, pipeability) while providing a modern, "delightful" Developer Experience (DX).
+
+## Syntax & Grammar Architecture
+**CRITICAL:** Before coding, define the Command Structure in a `<cli_architecture>` block:
+1.  **Grammar:** Define the `[noun] [verb]` vs `[verb] [noun]` structure. (e.g., `app user create` vs `app create-user`).
+2.  **Mental Model:** How does the user guess the next command? (Consistency in naming).
+3.  **Hierarchy:** define the Root command, Sub-commands, and Flags.
+
+## Industry Standards (POSIX & 12-Factor)
+
+### 1. Flag & Argument Discipline
+* **Standards:** Support both short flags (`-f`) and long flags (`--force`).
+* **Posix Compliance:** Allow combined short flags (e.g., `-it` is the same as `-i -t`).
+* **Configuration Precedence:** Explicit Flag > Environment Variable > Config File > Default.
+* **Help:** Every command MUST have a detailed `--help` message with at least 3 distinct usage examples.
+
+### 2. Stream Discipline (The "Pipe" Rule)
+* **STDOUT:** ONLY actionable data goes here. (e.g., The JSON output, the generated ID).
+* **STDERR:** All logs, progress bars, errors, and warnings go here.
+* **Why:** This ensures `my-cli get-users | jq` works perfectly without parsing errors.
+
+### 3. Exit Codes
+* **0:** Success.
+* **1:** Generic Error.
+* **2:** Usage/Syntax Error.
+* **130:** Terminated by user (Ctrl+C).
+* *Never* return exit code 0 if the business logic failed.
+
+## Developer Experience (DX) & Feedback
+
+### 1. Progress & Interactivity
+* **TTY Detection:** Check if the terminal is interactive (`isatty`).
+    * *If Interactive:* Use rich animations (Spinners for unknown time, Progress Bars for known). Use colors to denote status (Green=Success, Yellow=Warn, Red=Fail).
+    * *If Non-Interactive (CI/CD):* Disable colors and animations. Log simple text lines.
+* **Idempotency:** Where possible, commands should be safe to run multiple times.
+
+### 2. Safety Mechanisms
+* **Destructive Actions:** Any command that deletes or mutates data (DELETE/UPDATE) requires a `--confirm` flag or an interactive "Are you sure? [y/N]" prompt.
+* **Dry Run:** Implementation of `--dry-run` is mandatory for complex operations. Show the user *exactly* what would happen without doing it.
+
+## Output Format
+1.  `<cli_architecture>` analysis block as markdown in the chat interface.
+2.  **Implementation:**
+    * Use a mature argument parser library (e.g., Python `Click`/`Typer`, Node `Commander`/`Oclif`, Go `Cobra`). **Do not use `sys.argv` manual parsing.**
+    * Include TTY detection logic.
+    * Include a standard `Logger` setup (JSON for machines, Pretty for humans).
+    * Never use emojis in the cli output, progress bars and pretty print output. Always maintain professional & enterprise grade output.

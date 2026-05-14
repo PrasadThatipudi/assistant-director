@@ -1,0 +1,250 @@
+# Assistant Director
+
+Assistant Director is a monorepo for an independent filmmaker companion app: it centralizes production planning on mobile while keeping a proper server database for durability, and it supports **offline-first** project data plus **cached script files** for reading without network access after an initial download.
+
+## Context and stack
+
+| Area | Technology |
+| :--- | :--- |
+| Mobile | Expo SDK 54, React Native 0.81, TypeScript, React Navigation |
+| Local persistence | SQLite (`expo-sqlite`) with an outbox for sync |
+| API | Python 3.11+, FastAPI, SQLAlchemy 2, Alembic |
+| Database | PostgreSQL 16 (Docker), port **5433** on the host to avoid colliding with a local Postgres on 5432 |
+| Script blobs | Filesystem under `BLOB_STORAGE_PATH` (replaceable with S3-compatible storage later) |
+
+## Prerequisites
+
+- Node.js LTS and npm
+- Docker Desktop (or compatible) for PostgreSQL
+- Python 3.11+ and `pip`
+- Watchman (recommended on macOS for Metro)
+- **Android development client only:** [Android Studio](https://developer.android.com/studio) with an SDK install, **`ANDROID_HOME`** (often `~/Library/Android/sdk` on macOS), and **`platform-tools`** on your **`PATH`** so `adb` runs in the terminal. See [Android: running the dev client](#android-running-the-dev-client-npm-run-devandroidfrontend) below.
+
+## Quick start (under 10 minutes)
+
+### 1. Clone and install JavaScript dependencies
+
+```bash
+git clone <your-remote-url> assistant-director
+cd assistant-director
+npm install
+```
+
+### 2. Start the backend (simplified)
+
+**One command for first-time setup and startup:**
+```bash
+npm run backend:dev
+```
+
+**For subsequent runs (after initial setup):**
+```bash
+npm run backend:start
+```
+
+**Just the database:**
+```bash
+npm run backend:db
+```
+
+**Stop all backend services:**
+```bash
+npm run backend:stop
+```
+
+<details>
+<summary>Manual backend setup (if you prefer step-by-step)</summary>
+
+**Start PostgreSQL and apply migrations:**
+```bash
+docker compose up -d
+cd backend
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e .
+cp .env.example .env
+alembic upgrade head
+```
+
+**Run the API:**
+```bash
+cd backend
+source .venv/bin/activate
+uvicorn assistant_director_api.main:app --reload --host 0.0.0.0 --port 8000
+```
+</details>
+
+**Verify the backend is running:**
+
+```bash
+curl -sS http://127.0.0.1:8000/health
+```
+
+### 3. Run the Expo app
+
+The in-app alert **“Cannot reach the API”** (copy about `EXPO_PUBLIC_API_BASE_URL`) means the **client bundle has no API base URL** yet—it is not the same as “the backend is down.” If the URL is set but the server is stopped, you would normally see **“Script upload”** with a network or HTTP error after the request runs.
+
+Configure the API URL for the mobile client (required for **script upload** and server sync):
+
+```bash
+cp frontend/.env.example frontend/.env
+# Edit frontend/.env and set EXPO_PUBLIC_API_BASE_URL for your setup (see comments in that file).
+```
+
+**Physical phone or tablet:** set `EXPO_PUBLIC_API_BASE_URL` to `http://<your-computer-LAN-IP>:8000` (not `127.0.0.1`). The API must be listening on `0.0.0.0` (see step 3) so the device can reach it. Restart Metro after editing `.env`, then reload the app.
+
+### Expo Go, LAN HTTP, and development builds
+
+**Expo Go** is a generic client from the App Store. It does **not** include this repo’s native settings from [`frontend/app.config.js`](frontend/app.config.js) (for example `NSAllowsLocalNetworking` on iOS and `usesCleartextTraffic` on Android). Plain **`http://` to your Mac’s LAN IP** therefore often fails from a real device with a generic **“Network request failed”** error, even when the URL is correct.
+
+Pick **one** primary approach:
+
+| Approach | When to use | What you do |
+| :--- | :--- | :--- |
+| **A. Development build** (recommended for device + local API) | You want `http://<LAN-IP>:8000` on a physical phone | Install native deps once, then from repo root run `npm run dev:ios:frontend` or `npm run dev:android:frontend` (or the same scripts inside `frontend/`). This builds a dev client that includes [`frontend/app.config.js`](frontend/app.config.js) networking flags. The [`frontend/app.json`](frontend/app.json) includes the `expo-dev-client` config plugin. After the first native build, start JS with `npm run start:frontend` and open the **Assistant Director** dev client (not Expo Go). |
+| **B. Stay on Expo Go** | You do not want to compile native code yet | Expose the API over **HTTPS** with a hostname the phone can reach (for example **ngrok**, **Cloudflare Tunnel**, or a hosted staging API). Set `EXPO_PUBLIC_API_BASE_URL` to that **`https://...`** base URL and restart Metro. |
+
+**Verify reachability before blaming the app:**
+
+1. On the **phone’s browser** (Safari or Chrome), open `http://<LAN-IP>:8000/docs` (or `/health` from step 3). If that does not load, fix same Wi‑Fi, Mac firewall, and `uvicorn --host 0.0.0.0` first.
+2. Confirm the Mac allows inbound connections on port **8000** if you use a firewall.
+3. After changing `.env` or switching Expo Go vs dev client, **restart Metro** and fully reload the app.
+
+You can instead (or additionally) put the same variable in a **`.env` file at the repository root**; Metro loads root `.env` first, then `frontend/.env` (the latter wins if both define the same key).
+
+In a second terminal, from the repository root:
+
+```bash
+npm run start:frontend
+```
+
+Alternatively, without a `.env` file, export the variable once per shell before starting Metro (it must be present when the bundle is built):
+
+```bash
+export EXPO_PUBLIC_API_BASE_URL=http://127.0.0.1:8000
+npm run start:frontend
+```
+
+On Android emulator, use `http://10.0.2.2:8000` instead of `127.0.0.1` so the device can reach the host. For a physical device, use your computer’s LAN IP. Restart Metro after changing this value.
+
+Typecheck:
+
+```bash
+npm run typecheck:frontend
+```
+
+## Architecture
+
+```mermaid
+flowchart LR
+  subgraph mobile [Expo_client]
+    UI[React_Navigation_UI]
+    LDB[(SQLite)]
+    OB[outbox_table]
+    FS[Script_file_cache]
+  end
+  subgraph server [FastAPI]
+    API[REST_endpoints]
+    PG[(Postgres)]
+    BLOB[blob_directory]
+  end
+  UI --> LDB
+  UI --> FS
+  LDB --> OB
+  OB -->|"online_sync"| API
+  API --> PG
+  API --> BLOB
+  FS -->|"download"| API
+```
+
+- **Projects** live in SQLite on device for fast lists and offline edits. Changes are appended to an **outbox** and pushed to `POST /v1/sync/push` when the network is available (last-write-wins using `updated_at`).
+- **Scripts** are uploaded with `POST /v1/projects/{id}/scripts`, then **downloaded into app sandbox storage** so the Script reader can open them offline.
+
+## Repository layout
+
+| Path | Role |
+| :--- | :--- |
+| [`frontend/`](frontend/) | Expo application |
+| [`backend/`](backend/) | FastAPI service and Alembic migrations |
+| [`docker-compose.yml`](docker-compose.yml) | PostgreSQL for local development |
+
+## Configuration
+
+- Backend: see [`backend/.env.example`](backend/.env.example) (never commit real secrets).
+- Frontend: set `EXPO_PUBLIC_API_BASE_URL` to your API base URL. If unset, the app stays in a local-only mode with a fixed offline owner id and no sync. **Expo Go** with plain `http://` to a LAN machine is unreliable; see “Expo Go, LAN HTTP, and development builds” above.
+
+## Common issues
+
+- **Metro EMFILE / too many open files (macOS)** — install Watchman.
+- **“Network request failed” on script upload (physical device, Expo Go, `http://` LAN URL)** — Expo Go cannot rely on this project’s cleartext/ATS overrides. Use a **development build** (`npm run dev:ios:frontend` / `npm run dev:android:frontend`) or an **HTTPS** API URL. In-app errors prefixed with `USER_REGISTER_NETWORK:` or `SCRIPT_UPLOAD_NETWORK:` indicate which step failed.
+- **Cannot connect to API from a device** — use your machine LAN IP or `10.0.2.2` on Android emulator, not `localhost` from the phone’s point of view.
+- **Postgres `role "assistant" does not exist` on port 5432** — another Postgres is using 5432. Use the provided Docker mapping on **5433** and the default `DATABASE_URL` in `.env.example`.
+- **`expo run:android`: “No Android connected device found”** — you need a **running emulator** or a **USB-connected phone** with debugging enabled, and `adb devices` must list at least one line in state `device`. See [Android: running the dev client](#android-running-the-dev-client).
+
+## Workspace commands
+
+### Frontend Commands
+| Command | Purpose |
+| :--- | :--- |
+| `npm run start:frontend` | Start Expo for the workspace package |
+| `npm run dev:ios:frontend` | Build and run the iOS **development client** (native; first run is slow) |
+| `npm run dev:android:frontend` | Build and run the Android **development client** |
+| `npm run typecheck:frontend` | Run `tsc --noEmit` in `frontend/` |
+
+### Backend Commands
+| Command | Purpose |
+| :--- | :--- |
+| `npm run backend:dev` | **One-command setup and start** (first time or after clean) |
+| `npm run backend:start` | Start database and API server (after initial setup) |
+| `npm run backend:setup` | Setup virtual environment, dependencies, and migrations |
+| `npm run backend:db` | Start PostgreSQL database only |
+| `npm run backend:stop` | Stop all backend services |
+
+## Android: running the dev client
+
+Use this when you run **`npm run dev:android:frontend`** (which invokes `expo run:android`).
+`expo run:android` installs the native **development build** onto whatever **Android Debug Bridge (`adb`)** can see. If nothing is online, Expo reports **“No Android connected device found, and no emulators could be started automatically.”** That is not a bug in this repo’s npm scripts; you need a deployment target.
+
+Official overview: [Run your app on an Android device emulator (Expo)](https://docs.expo.dev/workflow/android-studio-emulator/).
+
+### 1. SDK and `adb`
+
+1. Install **Android Studio** and open **SDK Manager** to install **Android SDK Platform-Tools** (includes `adb`).
+2. Set **`ANDROID_HOME`** to your SDK root (Android Studio → **Settings → Languages & Frameworks → Android SDK** shows **Android SDK Location**). On many Macs this is `~/Library/Android/sdk`.
+3. Add Platform-Tools to your **`PATH`** in the same shell you use for Expo, for example:
+   ```bash
+   export ANDROID_HOME="$HOME/Library/Android/sdk"
+   export PATH="$PATH:$ANDROID_HOME/platform-tools"
+   ```
+4. Confirm: `adb version` works.
+
+### 2. Start a target (emulator or device)
+
+**Option A — Android Virtual Device (emulator)**
+
+1. Android Studio → **Device Manager** → create a virtual device if needed → **Run** it and wait until the emulator home screen appears.
+2. In a terminal: `adb devices` — you should see one serial with state **`device`** (not `offline` or `unauthorized`).
+
+**Option B — Physical phone**
+
+1. Enable **Developer options** and **USB debugging** ([device developer options](https://developer.android.com/studio/run/device.html#developer-device-options)).
+2. Connect USB; accept the **Allow USB debugging** / RSA prompt on the phone.
+3. `adb devices` should show your phone as **`device`**.
+
+**Option C — Genymotion**
+
+If you use Genymotion, set **Settings → ADB → Use custom Android SDK tools** and point it at the same **`ANDROID_HOME`** so there is a single `adb` and `adb devices` lists the VM.
+
+### 3. Build and install
+
+From the **repository root**, with `ANDROID_HOME` and `PATH` set in that terminal:
+
+```bash
+npm run dev:android:frontend
+```
+
+If `adb devices` is empty, or every line is `unauthorized`, fix SDK path and USB debugging before retrying.
+
+## Further reading
+
+- Backend runbook: [`backend/README.md`](backend/README.md)

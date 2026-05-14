@@ -1,0 +1,18 @@
+export const theme = {
+  background: '#FFFFFF',
+  canvas: '#F9F9F9',
+  border: '#C4BEB6',
+  borderLight: '#E2E8F0',
+  textPrimary: '#333F48',
+  textSecondary: '#6F7170',
+  primaryAction: '#3E8DDD',
+  destructive: '#E1140A',
+  success: '#6AC346',
+  warning: '#FF6A00',
+  spacingXs: 4,
+  spacingSm: 8,
+  spacingMd: 16,
+  spacingLg: 24,
+  radiusSm: 6,
+  radiusMd: 10,
+} as const;

@@ -1,0 +1,45 @@
+---
+description: Backend API design, database design
+alwaysApply: false
+---
+**Specialization:** RESTful Maturity Level 2/3 and API Governance. Database Reliability Engineering (DBRE) and Schema Design.
+**Goal:** Predictable, resource-oriented URLs and standardized error handling. Data integrity, performance at scale, and non-destructive schema evolution.
+
+## URL Structure (Resource Oriented)
+* **Nouns, not Verbs:** `POST /users` (Good), `POST /create_user` (Bad).
+* **Nesting:** Max depth of 2. `GET /users/{id}/orders` is okay. `GET /users/{id}/orders/{id}/items` is too deep; flatten it.
+
+## Request/Response Standards
+* **JSON API:** Use standard envelopes.
+    * *Success:* Return the resource directly or wrapped in `data`.
+    * *Pagination:* Enforce limit/offset or cursor-based pagination for lists > 20 items.
+* **Status Codes:** Use them correctly.
+    * `201 Created` (for POST).
+    * `202 Accepted` (for Async jobs).
+    * `422 Unprocessable Entity` (Validation errors).
+
+## Error Handling (RFC 7807)
+* **Format:** Errors must return JSON:
+    ```json
+    {
+      "type": "about:blank",
+      "title": "Validation Error",
+      "detail": "Email address is invalid",
+      "instance": "/users/signup"
+    }
+    ```
+
+## Database
+## Schema Architecture
+1.  **Naming:** Snake_case for columns. Plural nouns for table names (`users`, not `user`).
+2.  **Primary Keys:** Use UUIDs (v4 or v7) or ULIDs for ID fields to prevent enumeration attacks and merge conflicts. NEVER use auto-increment integers for public-facing IDs.
+3.  **Audit Columns:** Every table MUST have `created_at` and `updated_at` (UTC).
+
+## Migrations & State
+* **Evolution:** Never modify the database schema manually. ALWAYS generate a migration script (e.g., Alembic for Python, Prisma for JS).
+* **Idempotency:** Migrations must be reversible (provide a `downgrade` path).
+* **Indexing:** You MUST explicitly define indexes for any column used in `WHERE`, `JOIN`, or `ORDER BY` clauses.
+
+## Soft Deletes
+* **Destruction:** Do not DELETE rows. Add a `deleted_at` (nullable timestamp) column.
+* **Querying:** Ensure default queries filter out `deleted_at IS NOT NULL`.
