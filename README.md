@@ -200,6 +200,42 @@ flowchart LR
 | `npm run backend:db` | Start PostgreSQL database only |
 | `npm run backend:stop` | Stop all backend services |
 
+## CI/CD and deployment
+
+### Continuous integration (GitHub Actions)
+
+On every **pull request** and **push** to `main`, [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs:
+
+1. **Frontend** – `npm ci` at the repo root, then `npm run typecheck:frontend`.
+2. **Backend** – Python 3.11, `pip install -e ".[dev]"` from [`backend/`](backend/), **Ruff** (`F` rules only for now), **pytest**, and a smoke import of the FastAPI app.
+3. **Docker** – builds the API image from [`backend/Dockerfile`](backend/Dockerfile). On **push to `main`** only, the workflow logs in to **GHCR** and pushes tags `sha` and `main` for `ghcr.io/<lowercase-owner>/assistant-director-api`.
+
+Enable **branch protection** on `main` and require these checks to pass before merge.
+
+### API container (Docker)
+
+- **Image:** [`backend/Dockerfile`](backend/Dockerfile) – Python 3.11 slim, non-root user `app`, `uvicorn` on port **8000**, default `BLOB_STORAGE_PATH=/data/blobs`.
+- **Runtime env:** set at deploy time (never commit secrets):
+  - `DATABASE_URL` – Postgres DSN (same shape as [`backend/src/assistant_director_api/config.py`](backend/src/assistant_director_api/config.py)).
+  - `BLOB_STORAGE_PATH` – writable directory for script blobs (use a volume in production).
+  - `CORS_ALLOW_ORIGINS` – comma-separated allow list; include your **Netlify** site URL and any Expo dev origins you use.
+
+**Migrations:** after the database is up, run `alembic upgrade head` once per deploy (release command, init container, or manual `docker compose run`). Do not rely on CI alone to migrate production.
+
+### Example production compose
+
+[`docker-compose.prod.yml`](docker-compose.prod.yml) shows **Postgres + API** with env placeholders (`API_IMAGE`, `DATABASE_URL`, `POSTGRES_PASSWORD`, etc.). Copy values into a local `.env.prod` (gitignored) on the server.
+
+### Netlify (static site)
+
+The repo includes [`netlify.toml`](netlify.toml) and a minimal static site under [`site/`](site/) (landing copy only).
+
+1. In Netlify: **Add new site → Import from Git**, select this repository.
+2. Use defaults from `netlify.toml` (**publish directory:** `site`). No npm build is required unless you add one later.
+3. Add your deployed **HTTPS** Netlify URL to the API’s `CORS_ALLOW_ORIGINS` and to the mobile client `EXPO_PUBLIC_API_BASE_URL` for production builds.
+
+**Note:** Netlify serves static files here. The **FastAPI** app must run on a **Docker-capable** host (VM, Fly.io, Render, Railway, etc.); see Phase 3 in the internal CI/CD plan.
+
 ## Android: running the dev client
 
 Use this when you run **`npm run dev:android:frontend`** (which invokes `expo run:android`).

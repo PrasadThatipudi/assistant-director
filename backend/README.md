@@ -77,3 +77,23 @@ The `POST /v1/users` response includes `id`. The mobile client uses `Authorizati
 
 - **`FATAL: role "assistant" does not exist` on port 5432** — another Postgres instance is bound to 5432. This repo maps Docker Postgres to **5433**; ensure `DATABASE_URL` uses that port.
 - **Alembic cannot import the app** — run commands from `backend/` with `pip install -e .` so `assistant_director_api` is on `PYTHONPATH`.
+
+## Docker image
+
+Build from the `backend/` directory (context must include `pyproject.toml`, `src/`, `alembic/`):
+
+```bash
+docker build -t assistant-director-api:local .
+```
+
+Run (example; set `DATABASE_URL` to a reachable Postgres):
+
+```bash
+docker run --rm -p 8000:8000 \
+  -e DATABASE_URL=postgresql+psycopg://assistant:assistant@host.docker.internal:5433/assistant_director \
+  -e BLOB_STORAGE_PATH=/data/blobs \
+  -e CORS_ALLOW_ORIGINS=http://localhost:8081 \
+  assistant-director-api:local
+```
+
+CI pushes `ghcr.io/<github-owner-lowercase>/assistant-director-api` on pushes to `main` (see root README **CI/CD and deployment**).
