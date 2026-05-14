@@ -8,7 +8,7 @@ import { theme } from '../../../shell/theme';
 import { PrimaryButton } from '../../../shared/ui/PrimaryButton';
 import { Screen } from '../../../shared/ui/Screen';
 import { useBootstrap } from '../../../shared/context/BootstrapContext';
-import { getScriptCacheRow, uploadScriptForProject } from '../../scripts/scriptStorage';
+import { getScriptCacheRow, isSpScreenplayFileName, uploadScriptForProject } from '../../scripts/scriptStorage';
 import { projectRepository } from '../data/projectRepository';
 import { useProject } from '../hooks/useProject';
 
@@ -109,12 +109,15 @@ export function ProjectDetailScreen({ navigation, route }: Props) {
         return;
       }
       const asset = picked.assets[0];
-      await uploadScriptForProject(
-        project.id,
-        asset.uri,
-        asset.name ?? 'script',
-        asset.mimeType ?? 'application/octet-stream',
-      );
+      const pickedName = asset.name ?? 'script';
+      if (!isSpScreenplayFileName(pickedName)) {
+        Alert.alert(
+          'Wrong file type',
+          'Only .sp screenplay files can be uploaded. Save or export your script with the .sp extension and try again.',
+        );
+        return;
+      }
+      await uploadScriptForProject(project.id, asset.uri, pickedName, 'text/x-sp');
       setScriptMeta(getScriptCacheRow(project.id));
       
       const successMessage = isOfflineMode 

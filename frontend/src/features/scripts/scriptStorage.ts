@@ -25,7 +25,12 @@ function cachedBinaryFallbackMessage(mimeType: string, localUri: string): string
 
 function filenameLooksLikePlainTextScript(fileName: string): boolean {
   const normalized = fileName.trim().toLowerCase();
-  return /\.(fountain|txt|md|markdown)$/.test(normalized);
+  return /\.(sp|fountain|txt|md|markdown)$/.test(normalized);
+}
+
+export function isSpScreenplayFileName(fileName: string): boolean {
+  const base = fileName.trim().split(/[/\\]/).pop() ?? '';
+  return base.toLowerCase().endsWith('.sp');
 }
 
 function wrapScriptUploadNetworkError(e: unknown): never {

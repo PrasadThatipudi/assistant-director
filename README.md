@@ -158,7 +158,7 @@ flowchart LR
 ```
 
 - **Projects** live in SQLite on device for fast lists and offline edits. Changes are appended to an **outbox** and pushed to `POST /v1/sync/push` when the network is available (last-write-wins using `updated_at`).
-- **Scripts** are uploaded with `POST /v1/projects/{id}/scripts`, then **downloaded into app sandbox storage** so the Script reader can open them offline.
+- **Scripts** are uploaded with `POST /v1/projects/{id}/scripts` as UTF-8 **`.sp` screenplay files only** (validated on the server), then **downloaded into app sandbox storage** so the Script reader can open them offline.
 
 ## Repository layout
 
