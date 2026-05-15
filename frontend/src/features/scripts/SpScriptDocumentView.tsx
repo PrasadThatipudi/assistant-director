@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import type { SpDocument } from './parsing/scriptParsingAdapter';
 
@@ -7,7 +7,7 @@ import { theme } from '../../shell/theme';
 
 const SCENE_FADE_ALPHAS = [0.012, 0.02, 0.03, 0.04, 0.05, 0.058] as const;
 
-const SCENE_CHEVRON_GLYPH = '\u25BE';
+const SCENE_FOOTER_CHEVRON = require('../../../assets/scene-footer-chevron.png');
 
 type Props = {
   document: SpDocument;
@@ -175,18 +175,19 @@ export function SpScriptDocumentView({ document }: Props) {
                   },
                 ]}
               >
-                <Text
+                <Image
                   accessible={false}
+                  importantForAccessibility="no"
+                  resizeMode="contain"
+                  source={SCENE_FOOTER_CHEVRON}
                   style={[
-                    styles.sceneChevronGlyph,
+                    styles.sceneChevronImage,
                     {
-                      color: theme.textSecondary,
+                      tintColor: theme.textSecondary,
                       transform: [{ rotate: collapsed ? '0deg' : '180deg' }],
                     },
                   ]}
-                >
-                  {SCENE_CHEVRON_GLYPH}
-                </Text>
+                />
               </Pressable>
             </View>
           </View>
@@ -260,11 +261,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: theme.spacingSm,
   },
-  sceneChevronGlyph: {
-    fontSize: 22,
-    lineHeight: 22,
-    textAlign: 'center',
-    includeFontPadding: false,
+  sceneChevronImage: {
+    width: 28,
+    height: 28,
   },
   sceneFadeOverlay: {
     ...StyleSheet.absoluteFillObject,
