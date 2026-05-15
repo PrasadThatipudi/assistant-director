@@ -101,16 +101,15 @@ export function SpScriptDocumentView({ document }: Props) {
               </View>
             </Pressable>
 
-            {!collapsed ? (
-              <>
-                {Object.entries(scene.meta).map(([k, v]) => (
-                  <Text key={k} style={[styles.metaRow, { color: theme.textSecondary }]}>
-                    <Text style={[styles.metaKey, { color: theme.textPrimary }]}>{k}: </Text>
-                    {v}
-                  </Text>
-                ))}
+            {Object.entries(scene.meta).map(([k, v]) => (
+              <Text key={k} style={[styles.metaRow, { color: theme.textSecondary }]}>
+                <Text style={[styles.metaKey, { color: theme.textPrimary }]}>{k}: </Text>
+                {v}
+              </Text>
+            ))}
 
-                {scene.blocks.map((block, idx) => {
+            {!collapsed
+              ? scene.blocks.map((block, idx) => {
                   const key = `${scene.number}-${idx}`;
                   if (block.kind === 'action') {
                     return (
@@ -150,9 +149,8 @@ export function SpScriptDocumentView({ document }: Props) {
                       <Text style={[styles.dialogue, { color: theme.textPrimary }]}>{block.lines.join('\n')}</Text>
                     </View>
                   );
-                })}
-              </>
-            ) : null}
+                })
+              : null}
           </View>
         );
       })}
