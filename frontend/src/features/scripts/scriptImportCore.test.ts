@@ -14,7 +14,9 @@ describe('formatScriptValidationError', () => {
     const out = formatScriptValidationError(msg);
     expect(out).not.toBeNull();
     expect(out?.title).toBe('Invalid screenplay');
-    expect(out?.message).toContain('Line 3: unknown_body_line');
+    expect(out?.message).toContain('Line 3:');
+    expect(out?.message).not.toContain('unknown_body_line');
+    expect(out?.message).toMatch(/not recognized|screenplay format/i);
     expect(out?.message).toContain('This .sp file could not be parsed.');
   });
 

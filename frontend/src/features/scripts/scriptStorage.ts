@@ -3,6 +3,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 
 import { openAssistantDatabase } from '../../data/db/openDatabase';
 import { formatScriptValidationError, validateSpTextOrThrowJsonDetail } from './scriptImportCore';
+import { CACHED_SCRIPT_NON_TEXT_PLACEHOLDER } from './scriptUiCopy';
 
 const MAX_OCTET_STREAM_TEXT_BYTES = 2 * 1024 * 1024;
 const MAX_SCRIPT_BYTES = 20 * 1024 * 1024;
@@ -17,10 +18,6 @@ export type LocalScriptAttachment = {
 };
 
 export { formatScriptValidationError } from './scriptImportCore';
-
-function cachedBinaryFallbackMessage(mimeType: string, localUri: string): string {
-  return `Cached file (${mimeType}) is stored offline. Path: ${localUri}`;
-}
 
 function filenameLooksLikePlainTextScript(fileName: string): boolean {
   const normalized = fileName.trim().toLowerCase();
@@ -179,13 +176,13 @@ export async function readCachedScriptAsText(projectId: string): Promise<string 
   if (isOctetStream && name && filenameLooksLikePlainTextScript(name)) {
     const info = await FileSystem.getInfoAsync(row.localUri);
     if (!info.exists || typeof info.size !== 'number' || info.size > MAX_OCTET_STREAM_TEXT_BYTES) {
-      return cachedBinaryFallbackMessage(row.mimeType, row.localUri);
+      return CACHED_SCRIPT_NON_TEXT_PLACEHOLDER;
     }
     try {
       return await FileSystem.readAsStringAsync(row.localUri, { encoding: FileSystem.EncodingType.UTF8 });
     } catch {
-      return cachedBinaryFallbackMessage(row.mimeType, row.localUri);
+      return CACHED_SCRIPT_NON_TEXT_PLACEHOLDER;
     }
   }
-  return cachedBinaryFallbackMessage(row.mimeType, row.localUri);
+  return CACHED_SCRIPT_NON_TEXT_PLACEHOLDER;
 }

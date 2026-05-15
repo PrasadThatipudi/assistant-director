@@ -1,4 +1,5 @@
 import { parseResultOk, parseSpDocument } from './parsing/scriptParsingAdapter';
+import { parseErrorCodeToUserMessage } from './scriptUiCopy';
 
 type FastApiStyleDetailItem = { line?: number; code?: string };
 
@@ -17,7 +18,10 @@ export function formatScriptValidationError(rawMessage: string): { title: string
       const lines = detail
         .filter((item): item is FastApiStyleDetailItem => typeof item === 'object' && item !== null)
         .slice(0, 2)
-        .map((item) => `Line ${item.line ?? '?'}: ${item.code ?? 'error'}`);
+        .map(
+          (item) =>
+            `Line ${item.line ?? '?'}: ${parseErrorCodeToUserMessage(String(item.code ?? ''))}`,
+        );
       const body = ['This .sp file could not be parsed.', ...lines].join('\n');
       return { title: 'Invalid screenplay', message: body };
     }

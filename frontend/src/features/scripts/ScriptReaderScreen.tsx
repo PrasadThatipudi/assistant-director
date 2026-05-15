@@ -13,6 +13,7 @@ import { theme } from '../../shell/theme';
 import { Screen } from '../../shared/ui/Screen';
 import { parseResultOk, parseSpDocument } from './parsing/scriptParsingAdapter';
 import { readCachedScriptAsText } from './scriptStorage';
+import { isNonTextScriptPlaceholder, parseErrorCodeToUserMessage } from './scriptUiCopy';
 import { SpScriptDocumentView } from './SpScriptDocumentView';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ScriptReader'>;
@@ -39,7 +40,7 @@ export function ScriptReaderScreen({ route }: Props) {
   }, [projectId]);
 
   const parseOutcome =
-    body != null && !body.startsWith('Cached file (') ? parseSpDocument(body) : null;
+    body != null && !isNonTextScriptPlaceholder(body) ? parseSpDocument(body) : null;
   const parsedOk = parseOutcome != null && parseResultOk(parseOutcome);
 
   if (loading) {
@@ -60,7 +61,7 @@ export function ScriptReaderScreen({ route }: Props) {
     );
   }
 
-  const isBinaryPlaceholder = body.startsWith('Cached file (');
+  const isBinaryPlaceholder = isNonTextScriptPlaceholder(body);
 
   if (isBinaryPlaceholder) {
     return (
@@ -77,7 +78,7 @@ export function ScriptReaderScreen({ route }: Props) {
       <Screen>
         <View style={styles.toolbar}>
           <Pressable onPress={() => setShowRaw(true)} hitSlop={8} accessibilityRole="button">
-            <Text style={styles.toolbarLink}>Raw text</Text>
+            <Text style={styles.toolbarLink}>Full screenplay text</Text>
           </Pressable>
         </View>
         <SpScriptDocumentView document={parseOutcome.document} />
@@ -92,7 +93,7 @@ export function ScriptReaderScreen({ route }: Props) {
           <Text style={styles.bannerTitle}>Could not structure this script</Text>
           {parseOutcome.errors.slice(0, 5).map((e) => (
             <Text key={`${e.line}-${e.code}`} style={styles.bannerLine}>
-              Line {e.line}: {e.code}
+              Line {e.line}: {parseErrorCodeToUserMessage(e.code)}
             </Text>
           ))}
         </View>
@@ -100,7 +101,7 @@ export function ScriptReaderScreen({ route }: Props) {
       {parsedOk ? (
         <View style={styles.toolbar}>
           <Pressable onPress={() => setShowRaw(false)} hitSlop={8} accessibilityRole="button">
-            <Text style={styles.toolbarLink}>Structured view</Text>
+            <Text style={styles.toolbarLink}>Reading view</Text>
           </Pressable>
         </View>
       ) : null}

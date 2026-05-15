@@ -15,6 +15,7 @@ import {
   isSpScreenplayFileName,
   type ScriptImportPhase,
 } from '../../scripts';
+import { formatAttachedScriptSummary } from '../../scripts/scriptUiCopy';
 import { getApiBaseUrl } from '../../../shared/lib/env';
 import { projectRepository } from '../data/projectRepository';
 import { useProject } from '../hooks/useProject';
@@ -139,7 +140,7 @@ export function ProjectDetailScreen({ navigation, route }: Props) {
       );
       setScriptMeta(getScriptCacheRow(project.id));
 
-      const successMessage = `"${pickedName}" is saved on this device only (v${attachment.version}). The server never receives your screenplay bytes.`;
+      const successMessage = `"${pickedName}" is saved on this device only (version ${attachment.version}). The server never receives your screenplay bytes.`;
 
       const cachedAfterImport = getScriptCacheRow(project.id);
       const alertButtons: { text: string; style?: 'cancel'; onPress?: () => void }[] = [
@@ -170,7 +171,7 @@ export function ProjectDetailScreen({ navigation, route }: Props) {
         );
         return;
       }
-      Alert.alert('Import failed', message);
+      Alert.alert('Import failed', 'Something went wrong. Try again.');
     } finally {
       setScriptImporting(false);
       setScriptImportPhase(null);
@@ -233,7 +234,10 @@ export function ProjectDetailScreen({ navigation, route }: Props) {
           {scriptMeta ? (
             <>
               <Text style={styles.metaValue}>
-                v{scriptMeta.version} — {scriptMeta.mimeType}
+                {formatAttachedScriptSummary({
+                  version: scriptMeta.version,
+                  sourceFilename: scriptMeta.sourceFilename,
+                })}
               </Text>
               <PrimaryButton
                 label="Open script"
