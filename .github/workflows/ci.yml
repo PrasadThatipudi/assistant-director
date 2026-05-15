@@ -31,12 +31,31 @@ jobs:
       - name: Typecheck
         run: npm run typecheck:frontend
 
+      - name: Frontend unit tests
+        run: npm run test:frontend
+
       - name: Screenplay package tests
         run: npm run test:sp-screenplay
 
   backend:
     name: Backend install and checks
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: assistant
+          POSTGRES_PASSWORD: assistant
+          POSTGRES_DB: assistant_director
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U assistant -d assistant_director"
+          --health-interval 4s
+          --health-timeout 5s
+          --health-retries 8
+    env:
+      DATABASE_URL: postgresql+psycopg://assistant:assistant@127.0.0.1:5432/assistant_director
     defaults:
       run:
         working-directory: backend

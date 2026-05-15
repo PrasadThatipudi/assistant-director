@@ -1,25 +1,18 @@
 import Constants from 'expo-constants';
 
-function readPublicApiFromExtra(extra: unknown): string {
-  if (!extra || typeof extra !== 'object') {
-    return '';
-  }
-  const v = (extra as { publicApiBaseUrl?: unknown }).publicApiBaseUrl;
-  return typeof v === 'string' ? v.trim() : '';
-}
+import { readPublicApiFromExtra, resolveRawApiBaseUrlFromParts } from './envResolve';
+
+export { readPublicApiFromExtra, resolveRawApiBaseUrlFromParts } from './envResolve';
 
 function fromExpoLinkedConfig(): string {
-  const fromExpoConfig = readPublicApiFromExtra(Constants.expoConfig?.extra);
-  if (fromExpoConfig) {
-    return fromExpoConfig;
-  }
   const m2 = Constants.manifest2 as { extra?: { expoClient?: { extra?: unknown } } } | null;
-  const fromM2 = readPublicApiFromExtra(m2?.extra?.expoClient?.extra);
-  if (fromM2) {
-    return fromM2;
-  }
   const manifest = Constants.manifest as { extra?: unknown } | null;
-  return readPublicApiFromExtra(manifest?.extra);
+  return resolveRawApiBaseUrlFromParts(
+    Constants.expoConfig?.extra,
+    m2?.extra?.expoClient?.extra,
+    manifest?.extra,
+    undefined,
+  );
 }
 
 function fromBundler(): string {
@@ -30,7 +23,11 @@ function fromBundler(): string {
 }
 
 function resolveRawApiBaseUrl(): string {
-  return fromExpoLinkedConfig() || fromBundler();
+  const linked = fromExpoLinkedConfig();
+  if (linked) {
+    return linked;
+  }
+  return fromBundler();
 }
 
 export function getApiBaseUrl(): string {

@@ -190,6 +190,7 @@ flowchart LR
 | `npm run dev:ios:frontend` | Build and run the iOS **development client** (native; first run is slow) |
 | `npm run dev:android:frontend` | Build and run the Android **development client** |
 | `npm run typecheck:frontend` | Run `tsc --noEmit` in `frontend/` |
+| `npm run test:frontend` | Run Vitest in `frontend/` (pure TS + DOM-shimmed RN component smoke tests) |
 | `npm run test:sp-screenplay` | Run Vitest for `@assistant-director/sp-screenplay` |
 
 ### Backend Commands
@@ -201,6 +202,7 @@ flowchart LR
 | `npm run backend:db` | Start PostgreSQL database only |
 | `npm run backend:stop` | Stop all backend services |
 | `npm run backend:clear-projects` | Delete all projects in local Postgres (cascades scenes; keeps users) |
+| `npm run test:backend` | Run `pytest` in [`backend/`](backend/) (requires `.venv` with dev tools: `pip install -e ".[dev]"` there; start `docker compose` / set `DATABASE_URL` for full API integration coverage) |
 
 ## CI/CD and deployment
 
@@ -208,8 +210,8 @@ flowchart LR
 
 On every **pull request** and **push** to `main`, [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs:
 
-1. **Frontend** – `npm ci` at the repo root, then `npm run typecheck:frontend` and `npm run test:sp-screenplay` (Vitest for the [`packages/sp-screenplay`](packages/sp-screenplay/) workspace).
-2. **Backend** – Python 3.11, `pip install -e ".[dev]"` from [`backend/`](backend/), **Ruff**, **pytest** for the API, **pytest** for [`packages/sp-screenplay-py`](packages/sp-screenplay-py/) (grammar parity), and a smoke import of the FastAPI app.
+1. **Frontend** – `npm ci` at the repo root, then `npm run typecheck:frontend`, `npm run test:frontend`, and `npm run test:sp-screenplay` (Vitest for the [`packages/sp-screenplay`](packages/sp-screenplay/) workspace).
+2. **Backend** – Python 3.11, `pip install -e ".[dev]"` from [`backend/`](backend/), **Ruff**, **pytest** (API integration tests use a **Postgres 16** service container; start local `docker compose` to run the same tests offline), **pytest** for [`packages/sp-screenplay-py`](packages/sp-screenplay-py/), and a smoke import of the FastAPI app.
 3. **Docker** – builds the API image with **repository root** as context: `docker build -f backend/Dockerfile .` (see [`backend/Dockerfile`](backend/Dockerfile)). On **push to `main`** only, the workflow logs in to **GHCR** and pushes tags `sha` and `main` for `ghcr.io/<lowercase-owner>/assistant-director-api`.
 
 Enable **branch protection** on `main` and require these checks to pass before merge.

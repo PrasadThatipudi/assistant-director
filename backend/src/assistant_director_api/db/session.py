@@ -9,6 +9,15 @@ _engine = None
 _SessionLocal = None
 
 
+def reset_engine_for_tests() -> None:
+    """Dispose engine and clear factory. Used by tests after DATABASE_URL changes."""
+    global _engine, _SessionLocal
+    if _engine is not None:
+        _engine.dispose()
+    _engine = None
+    _SessionLocal = None
+
+
 def get_engine():
     global _engine, _SessionLocal
     if _engine is None:

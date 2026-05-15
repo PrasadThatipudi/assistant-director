@@ -2,7 +2,7 @@ import * as Crypto from 'expo-crypto';
 import * as FileSystem from 'expo-file-system/legacy';
 
 import { openAssistantDatabase } from '../../data/db/openDatabase';
-import { parseResultOk, parseSpDocument } from './parsing/scriptParsingAdapter';
+import { formatScriptValidationError, validateSpTextOrThrowJsonDetail } from './scriptImportCore';
 
 const MAX_OCTET_STREAM_TEXT_BYTES = 2 * 1024 * 1024;
 const MAX_SCRIPT_BYTES = 20 * 1024 * 1024;
@@ -16,32 +16,7 @@ export type LocalScriptAttachment = {
   sourceFilename: string | null;
 };
 
-type FastApiStyleDetailItem = { line?: number; code?: string };
-
-export function formatScriptValidationError(rawMessage: string): { title: string; message: string } | null {
-  const trimmed = rawMessage.trim();
-  if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) {
-    return null;
-  }
-  try {
-    const parsed = JSON.parse(trimmed) as { detail?: unknown };
-    const detail = parsed.detail;
-    if (typeof detail === 'string') {
-      return { title: 'Invalid screenplay', message: detail };
-    }
-    if (Array.isArray(detail)) {
-      const lines = detail
-        .filter((item): item is FastApiStyleDetailItem => typeof item === 'object' && item !== null)
-        .slice(0, 2)
-        .map((item) => `Line ${item.line ?? '?'}: ${item.code ?? 'error'}`);
-      const body = ['This .sp file could not be parsed.', ...lines].join('\n');
-      return { title: 'Invalid screenplay', message: body };
-    }
-  } catch {
-    return null;
-  }
-  return null;
-}
+export { formatScriptValidationError } from './scriptImportCore';
 
 function cachedBinaryFallbackMessage(mimeType: string, localUri: string): string {
   return `Cached file (${mimeType}) is stored offline. Path: ${localUri}`;
@@ -107,11 +82,7 @@ export async function importScriptForProjectLocally(
   }
 
   onPhase?.('validating');
-  const parseOutcome = parseSpDocument(text);
-  if (!parseResultOk(parseOutcome)) {
-    const detail = parseOutcome.errors.map((err) => ({ line: err.line, code: err.code }));
-    throw new Error(JSON.stringify({ detail }));
-  }
+  validateSpTextOrThrowJsonDetail(text);
 
   onPhase?.('saving');
   const localAssetId = Crypto.randomUUID();
