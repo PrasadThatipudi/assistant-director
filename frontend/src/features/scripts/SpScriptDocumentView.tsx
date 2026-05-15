@@ -5,6 +5,10 @@ import type { SpDocument } from './parsing/scriptParsingAdapter';
 
 import { theme } from '../../shell/theme';
 
+const SCENE_FADE_ALPHAS = [0.012, 0.02, 0.03, 0.04, 0.05, 0.058] as const;
+
+const SCENE_CHEVRON_GLYPH = '\u25BE';
+
 type Props = {
   document: SpDocument;
 };
@@ -92,78 +96,99 @@ export function SpScriptDocumentView({ document }: Props) {
             key={scene.number}
             style={[styles.sceneCard, { borderColor: theme.borderLight, backgroundColor: theme.canvas }]}
           >
-            <Text style={[styles.sceneTitle, { color: theme.textPrimary }]}>Scene {scene.number}</Text>
+            <View style={styles.sceneMain}>
+              <Text style={[styles.sceneTitle, { color: theme.textPrimary }]}>Scene {scene.number}</Text>
 
-            {Object.entries(scene.meta).map(([k, v]) => (
-              <Text key={k} style={[styles.metaRow, { color: theme.textSecondary }]}>
-                <Text style={[styles.metaKey, { color: theme.textPrimary }]}>{k}: </Text>
-                {v}
-              </Text>
-            ))}
+              {Object.entries(scene.meta).map(([k, v]) => (
+                <Text key={k} style={[styles.metaRow, { color: theme.textSecondary }]}>
+                  <Text style={[styles.metaKey, { color: theme.textPrimary }]}>{k}: </Text>
+                  {v}
+                </Text>
+              ))}
 
-            {!collapsed
-              ? scene.blocks.map((block, idx) => {
-                  const key = `${scene.number}-${idx}`;
-                  if (block.kind === 'action') {
+              {!collapsed
+                ? scene.blocks.map((block, idx) => {
+                    const key = `${scene.number}-${idx}`;
+                    if (block.kind === 'action') {
+                      return (
+                        <View
+                          key={key}
+                          style={[
+                            styles.noteBlock,
+                            { borderLeftColor: theme.primaryAction, backgroundColor: theme.canvas },
+                          ]}
+                        >
+                          <Text style={[styles.blockLabel, { color: theme.primaryAction }]}>Action</Text>
+                          <Text style={[styles.noteBody, { color: theme.textPrimary }]}>
+                            {block.lines.join('\n')}
+                          </Text>
+                        </View>
+                      );
+                    }
+                    if (block.kind === 'note') {
+                      return (
+                        <View
+                          key={key}
+                          style={[
+                            styles.noteBlock,
+                            { borderLeftColor: theme.warning, backgroundColor: theme.canvas },
+                          ]}
+                        >
+                          <Text style={[styles.blockLabel, { color: theme.warning }]}>{block.noteType}</Text>
+                          <Text style={[styles.noteBody, { color: theme.textPrimary }]}>
+                            {block.lines.join('\n')}
+                          </Text>
+                        </View>
+                      );
+                    }
                     return (
-                      <View
-                        key={key}
-                        style={[
-                          styles.noteBlock,
-                          { borderLeftColor: theme.primaryAction, backgroundColor: theme.canvas },
-                        ]}
-                      >
-                        <Text style={[styles.blockLabel, { color: theme.primaryAction }]}>Action</Text>
-                        <Text style={[styles.noteBody, { color: theme.textPrimary }]}>
-                          {block.lines.join('\n')}
-                        </Text>
+                      <View key={key} style={styles.block}>
+                        <Text style={[styles.character, { color: theme.textPrimary }]}>{block.character}</Text>
+                        <Text style={[styles.dialogue, { color: theme.textPrimary }]}>{block.lines.join('\n')}</Text>
                       </View>
                     );
-                  }
-                  if (block.kind === 'note') {
-                    return (
-                      <View
-                        key={key}
-                        style={[
-                          styles.noteBlock,
-                          { borderLeftColor: theme.warning, backgroundColor: theme.canvas },
-                        ]}
-                      >
-                        <Text style={[styles.blockLabel, { color: theme.warning }]}>{block.noteType}</Text>
-                        <Text style={[styles.noteBody, { color: theme.textPrimary }]}>
-                          {block.lines.join('\n')}
-                        </Text>
-                      </View>
-                    );
-                  }
-                  return (
-                    <View key={key} style={styles.block}>
-                      <Text style={[styles.character, { color: theme.textPrimary }]}>{block.character}</Text>
-                      <Text style={[styles.dialogue, { color: theme.textPrimary }]}>{block.lines.join('\n')}</Text>
-                    </View>
-                  );
-                })
-              : null}
+                  })
+                : null}
+            </View>
 
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={
-                collapsed ? `Expand scene ${scene.number} screenplay` : `Collapse scene ${scene.number} screenplay`
-              }
-              accessibilityState={{ expanded: !collapsed }}
-              onPress={() => toggleScene(scene.number)}
-              style={({ pressed }) => [
-                styles.sceneToggleFooter,
-                {
-                  borderTopColor: theme.borderLight,
-                  backgroundColor: pressed ? theme.borderLight : 'transparent',
-                },
-              ]}
-            >
-              <Text style={[styles.sceneFooterChevron, { color: theme.textSecondary }]}>
-                {collapsed ? '▶' : '▼'}
-              </Text>
-            </Pressable>
+            <View style={[styles.sceneFooterShell, { borderTopColor: theme.borderLight }]}>
+              <View style={styles.sceneFadeOverlay} pointerEvents="none">
+                {SCENE_FADE_ALPHAS.map((alpha, i) => (
+                  <View
+                    key={i}
+                    style={[styles.sceneFadeBand, { backgroundColor: `rgba(51, 63, 72, ${alpha})` }]}
+                  />
+                ))}
+              </View>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={
+                  collapsed ? `Expand scene ${scene.number}` : `Collapse scene ${scene.number}`
+                }
+                accessibilityState={{ expanded: !collapsed }}
+                android_ripple={{ color: 'rgba(51, 63, 72, 0.08)' }}
+                onPress={() => toggleScene(scene.number)}
+                style={({ pressed }) => [
+                  styles.sceneToggleFooter,
+                  {
+                    backgroundColor: pressed ? theme.borderLight : 'transparent',
+                  },
+                ]}
+              >
+                <Text
+                  accessible={false}
+                  style={[
+                    styles.sceneChevronGlyph,
+                    {
+                      color: theme.textSecondary,
+                      transform: [{ rotate: collapsed ? '0deg' : '180deg' }],
+                    },
+                  ]}
+                >
+                  {SCENE_CHEVRON_GLYPH}
+                </Text>
+              </Pressable>
+            </View>
           </View>
         );
       })}
@@ -206,7 +231,21 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 10,
     padding: 16,
+    gap: 0,
+    overflow: 'hidden',
+  },
+  sceneMain: {
     gap: 12,
+    paddingBottom: 4,
+  },
+  sceneFooterShell: {
+    position: 'relative',
+    alignSelf: 'stretch',
+    marginHorizontal: -16,
+    marginBottom: -16,
+    marginTop: theme.spacingXs,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    minHeight: 44,
     overflow: 'hidden',
   },
   sceneTitle: {
@@ -214,19 +253,25 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   sceneToggleFooter: {
+    flexGrow: 1,
     alignSelf: 'stretch',
-    marginHorizontal: -16,
-    marginBottom: -16,
-    marginTop: theme.spacingXs,
-    borderTopWidth: StyleSheet.hairlineWidth,
     minHeight: 44,
     justifyContent: 'center',
     alignItems: 'center',
     paddingVertical: theme.spacingSm,
   },
-  sceneFooterChevron: {
-    fontSize: 16,
+  sceneChevronGlyph: {
+    fontSize: 22,
     lineHeight: 22,
+    textAlign: 'center',
+    includeFontPadding: false,
+  },
+  sceneFadeOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    flexDirection: 'column',
+  },
+  sceneFadeBand: {
+    flex: 1,
   },
   metaRow: {
     fontSize: 14,

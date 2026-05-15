@@ -26,6 +26,15 @@ export const View = ({ children, style, ...rest }) =>
 export const Text = ({ children, style, selectable: _s, ...rest }) =>
   React.createElement('span', { 'data-testid': 'rn-text', style: flattenStyle(style), ...rest }, children);
 
+export const Image = ({ style, source: _s, resizeMode: _r, ...rest }) =>
+  React.createElement('img', {
+    'data-testid': 'rn-image',
+    alt: '',
+    src: 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7',
+    style: flattenStyle(style),
+    ...rest,
+  });
+
 export const ScrollView = ({ children, contentContainerStyle, style, ...rest }) =>
   React.createElement(
     'div',
