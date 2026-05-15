@@ -92,20 +92,7 @@ export function SpScriptDocumentView({ document }: Props) {
             key={scene.number}
             style={[styles.sceneCard, { borderColor: theme.borderLight, backgroundColor: theme.canvas }]}
           >
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={`Scene ${scene.number}`}
-              accessibilityState={{ expanded: !collapsed }}
-              onPress={() => toggleScene(scene.number)}
-              hitSlop={4}
-            >
-              <View style={styles.sceneHeaderRow}>
-                <Text style={[styles.sceneTitle, { color: theme.textPrimary }]}>Scene {scene.number}</Text>
-                <Text style={[styles.sceneChevron, { color: theme.textSecondary }]}>
-                  {collapsed ? '▶' : '▼'}
-                </Text>
-              </View>
-            </Pressable>
+            <Text style={[styles.sceneTitle, { color: theme.textPrimary }]}>Scene {scene.number}</Text>
 
             {Object.entries(scene.meta).map(([k, v]) => (
               <Text key={k} style={[styles.metaRow, { color: theme.textSecondary }]}>
@@ -157,6 +144,26 @@ export function SpScriptDocumentView({ document }: Props) {
                   );
                 })
               : null}
+
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={
+                collapsed ? `Expand scene ${scene.number} screenplay` : `Collapse scene ${scene.number} screenplay`
+              }
+              accessibilityState={{ expanded: !collapsed }}
+              onPress={() => toggleScene(scene.number)}
+              style={({ pressed }) => [
+                styles.sceneToggleFooter,
+                {
+                  borderTopColor: theme.borderLight,
+                  backgroundColor: pressed ? theme.borderLight : 'transparent',
+                },
+              ]}
+            >
+              <Text style={[styles.sceneFooterChevron, { color: theme.textSecondary }]}>
+                {collapsed ? '▶' : '▼'}
+              </Text>
+            </Pressable>
           </View>
         );
       })}
@@ -200,20 +207,26 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     padding: 16,
     gap: 12,
-  },
-  sceneHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    overflow: 'hidden',
   },
   sceneTitle: {
     fontSize: 18,
     fontWeight: '700',
-    flex: 1,
   },
-  sceneChevron: {
-    fontSize: 14,
-    marginLeft: theme.spacingSm,
+  sceneToggleFooter: {
+    alignSelf: 'stretch',
+    marginHorizontal: -16,
+    marginBottom: -16,
+    marginTop: theme.spacingXs,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    minHeight: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: theme.spacingSm,
+  },
+  sceneFooterChevron: {
+    fontSize: 16,
+    lineHeight: 22,
   },
   metaRow: {
     fontSize: 14,
