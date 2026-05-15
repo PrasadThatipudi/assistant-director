@@ -46,6 +46,9 @@ export function SpScriptDocumentView({ document }: Props) {
     setCollapsedSceneNumbers(new Set(document.scenes.map((s) => s.number)));
   }, [document.scenes]);
 
+  const allScenesCollapsed =
+    document.scenes.length > 0 && collapsedSceneNumbers.size === document.scenes.length;
+
   return (
     <ScrollView contentContainerStyle={styles.scroll}>
       <View style={[styles.headerCard, { borderColor: theme.borderLight, backgroundColor: theme.canvas }]}>
@@ -65,19 +68,13 @@ export function SpScriptDocumentView({ document }: Props) {
         <View style={styles.sceneToolbar}>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Expand all scenes"
-            onPress={expandAllScenes}
+            accessibilityLabel={allScenesCollapsed ? 'Expand all scenes' : 'Collapse all scenes'}
+            onPress={allScenesCollapsed ? expandAllScenes : collapseAllScenes}
             hitSlop={8}
           >
-            <Text style={[styles.sceneToolbarLink, { color: theme.primaryAction }]}>Expand all</Text>
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Collapse all scenes"
-            onPress={collapseAllScenes}
-            hitSlop={8}
-          >
-            <Text style={[styles.sceneToolbarLink, { color: theme.primaryAction }]}>Collapse all</Text>
+            <Text style={[styles.sceneToolbarLink, { color: theme.primaryAction }]}>
+              {allScenesCollapsed ? 'Expand all' : 'Collapse all'}
+            </Text>
           </Pressable>
         </View>
       ) : null}
@@ -188,7 +185,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'flex-end',
     alignItems: 'center',
-    gap: theme.spacingMd,
     paddingHorizontal: 4,
   },
   sceneToolbarLink: {
