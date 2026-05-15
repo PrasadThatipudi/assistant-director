@@ -12,11 +12,7 @@ from assistant_director_api.deps import get_current_user, utcnow
 from assistant_director_api.routers.projects import _get_owned_project
 from assistant_director_api.schemas import ScriptArtifactResponse
 from assistant_director_api.services import blob_store
-from assistant_director_api.services.sp_screenplay import (
-    SP_SCREENPLAY_MEDIA_TYPE,
-    SpScreenplayValidationError,
-    validate_sp_screenplay_file,
-)
+from sp_screenplay import SP_SCREENPLAY_MEDIA_TYPE, SpScreenplayValidationError, parse_sp, validate_sp_bytes
 
 router = APIRouter(tags=["scripts"])
 
@@ -33,9 +29,15 @@ async def upload_script(
     if len(data) > 20 * 1024 * 1024:
         raise HTTPException(status_code=413, detail="File too large")
     try:
-        validate_sp_screenplay_file(filename=file.filename, data=data)
+        text = validate_sp_bytes(filename=file.filename, data=data)
     except SpScreenplayValidationError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.detail) from None
+    parsed = parse_sp(text)
+    if not parsed.ok:
+        raise HTTPException(
+            status_code=422,
+            detail=[{"line": e.line, "code": e.code} for e in parsed.errors],
+        )
     settings = get_settings()
     settings.blob_storage_path.mkdir(parents=True, exist_ok=True)
     storage_key, digest = blob_store.save_blob(settings, data)

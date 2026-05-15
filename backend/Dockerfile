@@ -1,4 +1,5 @@
 # syntax=docker/dockerfile:1
+# Build from repository root: docker build -f backend/Dockerfile .
 
 FROM python:3.11-slim-bookworm
 
@@ -8,21 +9,25 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 RUN groupadd --gid 1000 app && useradd --uid 1000 --gid app --shell /usr/sbin/nologin --create-home app
 
-WORKDIR /app
+WORKDIR /build
 
-COPY pyproject.toml README.md alembic.ini ./
-COPY src ./src
-COPY alembic ./alembic
+COPY packages/sp-screenplay-py /build/packages/sp-screenplay-py
+COPY backend/pyproject.toml backend/README.md backend/alembic.ini /build/backend/
+COPY backend/src /build/backend/src
+COPY backend/alembic /build/backend/alembic
+
+WORKDIR /build/backend
 
 RUN pip install --upgrade pip && pip install --no-cache-dir .
 
-RUN mkdir -p /data/blobs && chown -R app:app /app /data
+RUN mkdir -p /data/blobs && chown -R app:app /build/backend /data
 
 USER app
 
+WORKDIR /build/backend
+
 EXPOSE 8000
 
-# Override at runtime (see backend README deploy section).
 ENV DATABASE_URL=postgresql+psycopg://assistant:assistant@localhost:5432/assistant_director \
     BLOB_STORAGE_PATH=/data/blobs \
     CORS_ALLOW_ORIGINS=http://localhost:8081

@@ -21,7 +21,25 @@ export default function App() {
       console.log('[App] Starting bootstrap process...', { manualRetry });
       setBootstrapState(manualRetry ? 'retrying' : 'loading');
       setErrorMessage('');
-      
+
+      // #region agent log
+      const { getApiBaseUrlDiagnostics } = await import('./src/shared/lib/env');
+      const diag = getApiBaseUrlDiagnostics();
+      fetch('http://127.0.0.1:7573/ingest/a4a749da-e3a0-4f3c-a932-73e321747efb', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'b61b79' },
+        body: JSON.stringify({
+          sessionId: 'b61b79',
+          runId: 'post-fix',
+          hypothesisId: 'H4',
+          location: 'App.tsx:runBootstrap',
+          message: 'bootstrap_start_api_diag',
+          data: { manualRetry, ...diag },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+      // #endregion
+
       const db = openAssistantDatabase();
       console.log('[App] Database opened');
       
@@ -47,10 +65,30 @@ export default function App() {
       setReady(true);
       
     } catch (error) {
-      console.error('[App] Bootstrap failed:', error);
+      console.warn('[App] Bootstrap failed:', error);
       const errorMsg = error instanceof Error ? error.message : String(error);
-      
-      if (errorMsg.includes('USER_REGISTER_NETWORK')) {
+      const isUserRegisterNetwork = errorMsg.includes('USER_REGISTER_NETWORK');
+      // #region agent log
+      fetch('http://127.0.0.1:7573/ingest/a4a749da-e3a0-4f3c-a932-73e321747efb', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'b61b79' },
+        body: JSON.stringify({
+          sessionId: 'b61b79',
+          runId: 'post-fix',
+          hypothesisId: 'H2',
+          location: 'App.tsx:catch',
+          message: 'bootstrap_catch_branch',
+          data: {
+            errorMsgPrefix: errorMsg.slice(0, 120),
+            isUserRegisterNetwork,
+            branch: isUserRegisterNetwork ? 'failed_no_ready' : 'offline_ready',
+          },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+      // #endregion
+
+      if (isUserRegisterNetwork) {
         // Network error - allow retry
         setErrorMessage('Cannot connect to server. Check your internet connection and ensure the backend is running.');
         setBootstrapState('failed');

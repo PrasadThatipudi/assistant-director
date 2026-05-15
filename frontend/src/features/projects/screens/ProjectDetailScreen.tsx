@@ -1,6 +1,7 @@
 import { useCallback, useLayoutEffect, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import Constants from 'expo-constants';
 import * as DocumentPicker from 'expo-document-picker';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../../shell/navigationTypes';
@@ -8,11 +9,36 @@ import { theme } from '../../../shell/theme';
 import { PrimaryButton } from '../../../shared/ui/PrimaryButton';
 import { Screen } from '../../../shared/ui/Screen';
 import { useBootstrap } from '../../../shared/context/BootstrapContext';
-import { getScriptCacheRow, isSpScreenplayFileName, uploadScriptForProject } from '../../scripts/scriptStorage';
+import { isSpScreenplayFileName } from '@assistant-director/sp-screenplay';
+import {
+  formatScriptUploadErrorAlert,
+  getScriptCacheRow,
+  type ScriptUploadPhase,
+  uploadScriptForProject,
+} from '../../scripts/scriptStorage';
+import { getApiBaseUrl } from '../../../shared/lib/env';
 import { projectRepository } from '../data/projectRepository';
 import { useProject } from '../hooks/useProject';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ProjectDetail'>;
+
+const API_UNREACHABLE_MESSAGE =
+  'Check Wi‑Fi and that the backend is running. Expo Go often cannot use http:// to your computer — use a development build or an https:// API URL.';
+
+function uploadPhaseLabel(phase: ScriptUploadPhase): string {
+  if (phase === 'checking') {
+    return 'Checking connection…';
+  }
+  if (phase === 'uploading') {
+    return 'Uploading…';
+  }
+  return 'Saving offline copy…';
+}
+
+function shouldShowExpoGoHttpBanner(): boolean {
+  const base = getApiBaseUrl();
+  return Constants.executionEnvironment === 'storeClient' && base.toLowerCase().startsWith('http://');
+}
 
 function formatTimestamp(iso: string): string {
   return new Date(iso).toLocaleString(undefined, {
@@ -29,6 +55,9 @@ export function ProjectDetailScreen({ navigation, route }: Props) {
   const { project, loading, refresh } = useProject(projectId);
   const { canPerformOperations, isOfflineMode, bootstrapState } = useBootstrap();
   const [scriptMeta, setScriptMeta] = useState<ReturnType<typeof getScriptCacheRow>>(null);
+  const [scriptUploading, setScriptUploading] = useState(false);
+  const [scriptUploadPhase, setScriptUploadPhase] = useState<ScriptUploadPhase | null>(null);
+  const [expoGoBannerDismissed, setExpoGoBannerDismissed] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -117,15 +146,40 @@ export function ProjectDetailScreen({ navigation, route }: Props) {
         );
         return;
       }
-      await uploadScriptForProject(project.id, asset.uri, pickedName, 'text/x-sp');
+
+      setScriptUploading(true);
+      setScriptUploadPhase('checking');
+      const artifact = await uploadScriptForProject(
+        project.id,
+        asset.uri,
+        pickedName,
+        'text/x-sp',
+        (phase) => setScriptUploadPhase(phase),
+      );
       setScriptMeta(getScriptCacheRow(project.id));
-      
-      const successMessage = isOfflineMode 
-        ? 'Script saved locally. It will sync when you go online.'
-        : 'Script uploaded successfully and cached locally.';
-      Alert.alert('Script saved', successMessage);
+
+      const successMessage = isOfflineMode
+        ? `"${pickedName}" was saved locally. It will sync when you go online.`
+        : `"${pickedName}" was uploaded successfully (version ${artifact.version}) and saved for offline reading.`;
+
+      const cachedAfterUpload = getScriptCacheRow(project.id);
+      const alertButtons: { text: string; style?: 'cancel'; onPress?: () => void }[] = [
+        { text: 'OK', style: 'cancel' },
+      ];
+      if (cachedAfterUpload) {
+        alertButtons.unshift({
+          text: 'View script',
+          onPress: () => navigation.navigate('ScriptReader', { projectId: project.id }),
+        });
+      }
+      Alert.alert('Upload successful', successMessage, alertButtons);
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Upload failed';
+      const validationAlert = formatScriptUploadErrorAlert(message);
+      if (validationAlert) {
+        Alert.alert(validationAlert.title, validationAlert.message);
+        return;
+      }
       if (message.includes('API is not configured')) {
         Alert.alert(
           'Backend not configured',
@@ -154,10 +208,17 @@ export function ProjectDetailScreen({ navigation, route }: Props) {
         );
         return;
       }
-      if (message.includes('SCRIPT_UPLOAD_NETWORK:')) {
+      if (
+        message.includes('SCRIPT_UPLOAD_UNREACHABLE') ||
+        message.includes('SCRIPT_UPLOAD_NETWORK:')
+      ) {
+        Alert.alert('Cannot reach API', API_UNREACHABLE_MESSAGE);
+        return;
+      }
+      if (message.includes('SCRIPT_UPLOAD_TIMEOUT')) {
         Alert.alert(
-          'Upload failed',
-          'Same as registration: Expo Go plus http:// to your LAN is unreliable. Prefer a dev build with cleartext/ATS from app.config, or an HTTPS API URL. Confirm Safari on the phone can open your API /docs URL.',
+          'Upload timed out',
+          'The server did not respond in time. Check the API URL and try again.',
         );
         return;
       }
@@ -169,6 +230,9 @@ export function ProjectDetailScreen({ navigation, route }: Props) {
         return;
       }
       Alert.alert('Upload failed', message);
+    } finally {
+      setScriptUploading(false);
+      setScriptUploadPhase(null);
     }
   };
 
@@ -209,6 +273,21 @@ export function ProjectDetailScreen({ navigation, route }: Props) {
         </View>
 
         <View style={styles.scriptBlock}>
+          {shouldShowExpoGoHttpBanner() && !expoGoBannerDismissed ? (
+            <View style={styles.expoGoBanner}>
+              <Text style={styles.expoGoBannerText}>
+                Script upload may fail in Expo Go with http://. Use a development build or an https:// API
+                URL.
+              </Text>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => setExpoGoBannerDismissed(true)}
+                hitSlop={8}
+              >
+                <Text style={styles.expoGoBannerDismiss}>Dismiss</Text>
+              </Pressable>
+            </View>
+          ) : null}
           <Text style={styles.metaLabel}>Script (offline cache)</Text>
           {scriptMeta ? (
             <>
@@ -217,15 +296,23 @@ export function ProjectDetailScreen({ navigation, route }: Props) {
               </Text>
               <PrimaryButton
                 label="Open cached script"
+                disabled={scriptUploading}
                 onPress={() => navigation.navigate('ScriptReader', { projectId: project.id })}
               />
             </>
           ) : (
             <Text style={styles.helper}>Upload while online to keep a local copy for offline reading.</Text>
           )}
+          {scriptUploading && scriptUploadPhase ? (
+            <View style={styles.uploadingRow}>
+              <ActivityIndicator color={theme.primaryAction} size="small" />
+              <Text style={styles.uploadingText}>{uploadPhaseLabel(scriptUploadPhase)}</Text>
+            </View>
+          ) : null}
           <PrimaryButton
-            label="Upload script"
+            label={scriptUploading ? 'Uploading…' : 'Upload script'}
             variant="secondary"
+            disabled={scriptUploading}
             onPress={() => void pickAndUploadScript()}
           />
         </View>
@@ -287,6 +374,35 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: theme.textSecondary,
     lineHeight: 20,
+  },
+  uploadingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacingSm,
+    paddingVertical: theme.spacingXs,
+  },
+  uploadingText: {
+    fontSize: 14,
+    color: theme.textSecondary,
+  },
+  expoGoBanner: {
+    backgroundColor: theme.canvas,
+    borderColor: theme.borderLight,
+    borderWidth: 1,
+    borderRadius: theme.radiusMd,
+    padding: theme.spacingMd,
+    gap: theme.spacingSm,
+  },
+  expoGoBannerText: {
+    fontSize: 13,
+    lineHeight: 18,
+    color: theme.textSecondary,
+  },
+  expoGoBannerDismiss: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.primaryAction,
+    alignSelf: 'flex-end',
   },
   metaLabel: {
     fontSize: 12,

@@ -31,6 +31,9 @@ jobs:
       - name: Typecheck
         run: npm run typecheck:frontend
 
+      - name: Screenplay package tests
+        run: npm run test:sp-screenplay
+
   backend:
     name: Backend install and checks
     runs-on: ubuntu-latest
@@ -54,6 +57,12 @@ jobs:
 
       - name: Pytest
         run: pytest -q
+
+      - name: Pytest screenplay library
+        working-directory: packages/sp-screenplay-py
+        run: |
+          pip install -e ".[dev]"
+          pytest -q
 
       - name: Smoke import app
         run: python -c "from assistant_director_api.main import app; assert app.title"
@@ -92,7 +101,7 @@ jobs:
       - name: Build (and push on main)
         uses: docker/build-push-action@v6
         with:
-          context: ./backend
+          context: .
           file: ./backend/Dockerfile
           push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
           tags: ${{ steps.meta.outputs.tags }}

@@ -27,7 +27,7 @@ async function attemptUserRegistration(base: string, retryCount: number): Promis
     console.log('[Auth] Registration response:', { status: res.status, ok: res.ok });
   } catch (e) {
     const detail = e instanceof Error ? e.message : String(e);
-    console.error('[Auth] Registration network error:', detail);
+    console.warn('[Auth] Registration network error:', detail);
     throw new Error(`USER_REGISTER_NETWORK: ${detail}`);
   }
   
@@ -91,18 +91,37 @@ export async function ensureApiUser(db: SQLiteDatabase, maxRetries = 3): Promise
     }
   }
   
-  // All retries failed
-  console.error('[Auth] All registration attempts failed, last error:', lastError?.message);
-  
-  // For HTTP errors (non-network), fall back to offline mode
+  // All retries failed — use offline mode for HTTP or network (retries already exhausted).
+  console.warn('[Auth] All registration attempts failed, last error:', lastError?.message);
+
   if (lastError?.message.includes('USER_REGISTER_HTTP')) {
     console.log('[Auth] HTTP error, falling back to offline mode');
-    db.runSync('INSERT OR REPLACE INTO meta (k, v) VALUES (?, ?)', ['api_user_id', OFFLINE_OWNER_ID]);
-    return OFFLINE_OWNER_ID;
+  } else {
+    console.log('[Auth] Network error after retries, falling back to offline mode');
   }
-  
-  // For network errors, throw so the UI can handle retry
-  throw lastError || new Error('USER_REGISTER_NETWORK: Unknown error');
+
+  // #region agent log
+  fetch('http://127.0.0.1:7573/ingest/a4a749da-e3a0-4f3c-a932-73e321747efb', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'b61b79' },
+    body: JSON.stringify({
+      sessionId: 'b61b79',
+      runId: 'post-fix',
+      hypothesisId: 'H1',
+      location: 'session.ts:ensureApiUser',
+      message: 'offline_fallback_after_retries',
+      data: {
+        lastErrorPrefix: (lastError?.message ?? '').slice(0, 160),
+        wasHttp: !!lastError?.message.includes('USER_REGISTER_HTTP'),
+        wasNetwork: !!lastError?.message.includes('USER_REGISTER_NETWORK'),
+      },
+      timestamp: Date.now(),
+    }),
+  }).catch(() => {});
+  // #endregion
+
+  db.runSync('INSERT OR REPLACE INTO meta (k, v) VALUES (?, ?)', ['api_user_id', OFFLINE_OWNER_ID]);
+  return OFFLINE_OWNER_ID;
 }
 
 export function authorizationHeader(db: SQLiteDatabase): string | null {

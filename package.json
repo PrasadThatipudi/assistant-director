@@ -2,7 +2,8 @@
   "name": "assistant-director-monorepo",
   "private": true,
   "workspaces": [
-    "frontend"
+    "frontend",
+    "packages/sp-screenplay"
   ],
   "scripts": {
     "start:frontend": "npm run start -w assistant-director",
@@ -11,10 +12,12 @@
     "android:frontend": "npm run android -w assistant-director",
     "ios:frontend": "npm run ios -w assistant-director",
     "typecheck:frontend": "npm run typecheck -w assistant-director",
+    "test:sp-screenplay": "npm run test -w @assistant-director/sp-screenplay",
     "backend:db": "docker compose up -d",
     "backend:setup": "npm run backend:db && cd backend && (test -d .venv || python3 -m venv .venv) && source .venv/bin/activate && pip install -e . && (test -f .env || cp .env.example .env) && alembic upgrade head",
     "backend:start": "npm run backend:db && cd backend && source .venv/bin/activate && uvicorn assistant_director_api.main:app --reload --host 0.0.0.0 --port 8000",
     "backend:dev": "npm run backend:setup && npm run backend:start",
-    "backend:stop": "docker compose down"
+    "backend:stop": "docker compose down",
+    "backend:clear-projects": "npm run backend:db && docker compose exec -T postgres psql -U assistant -d assistant_director -c \"DELETE FROM projects;\" && docker compose exec -T postgres psql -U assistant -d assistant_director -c \"SELECT COUNT(*) AS projects FROM projects; SELECT COUNT(*) AS scenes FROM scenes; SELECT COUNT(*) AS script_artifacts FROM script_artifacts;\""
   }
 }

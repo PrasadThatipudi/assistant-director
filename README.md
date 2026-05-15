@@ -158,7 +158,7 @@ flowchart LR
 ```
 
 - **Projects** live in SQLite on device for fast lists and offline edits. Changes are appended to an **outbox** and pushed to `POST /v1/sync/push` when the network is available (last-write-wins using `updated_at`).
-- **Scripts** are uploaded with `POST /v1/projects/{id}/scripts` as UTF-8 **`.sp` screenplay files only** (validated on the server), then **downloaded into app sandbox storage** so the Script reader can open them offline.
+- **Scripts** are uploaded with `POST /v1/projects/{id}/scripts` as UTF-8 **`.sp` screenplay files only** (validated and parsed on the server via the [`packages/sp-screenplay-py`](packages/sp-screenplay-py/) library), then **downloaded into app sandbox storage**. The Script reader uses the shared [`packages/sp-screenplay`](packages/sp-screenplay/) TypeScript parser for an **offline** structured view with a raw-text fallback.
 
 ## Repository layout
 
@@ -166,6 +166,8 @@ flowchart LR
 | :--- | :--- |
 | [`frontend/`](frontend/) | Expo application |
 | [`backend/`](backend/) | FastAPI service and Alembic migrations |
+| [`packages/sp-screenplay-py/`](packages/sp-screenplay-py/) | Reusable Python `.sp` validation and parse library |
+| [`packages/sp-screenplay/`](packages/sp-screenplay/) | Reusable TypeScript `.sp` parser (npm workspace) |
 | [`docker-compose.yml`](docker-compose.yml) | PostgreSQL for local development |
 
 ## Configuration
@@ -190,6 +192,7 @@ flowchart LR
 | `npm run dev:ios:frontend` | Build and run the iOS **development client** (native; first run is slow) |
 | `npm run dev:android:frontend` | Build and run the Android **development client** |
 | `npm run typecheck:frontend` | Run `tsc --noEmit` in `frontend/` |
+| `npm run test:sp-screenplay` | Run Vitest for `@assistant-director/sp-screenplay` |
 
 ### Backend Commands
 | Command | Purpose |
@@ -199,6 +202,7 @@ flowchart LR
 | `npm run backend:setup` | Setup virtual environment, dependencies, and migrations |
 | `npm run backend:db` | Start PostgreSQL database only |
 | `npm run backend:stop` | Stop all backend services |
+| `npm run backend:clear-projects` | Delete all projects in local Postgres (cascades scenes and script artifacts; keeps users) |
 
 ## CI/CD and deployment
 
@@ -206,15 +210,15 @@ flowchart LR
 
 On every **pull request** and **push** to `main`, [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs:
 
-1. **Frontend** – `npm ci` at the repo root, then `npm run typecheck:frontend`.
-2. **Backend** – Python 3.11, `pip install -e ".[dev]"` from [`backend/`](backend/), **Ruff** (`F` rules only for now), **pytest**, and a smoke import of the FastAPI app.
-3. **Docker** – builds the API image from [`backend/Dockerfile`](backend/Dockerfile). On **push to `main`** only, the workflow logs in to **GHCR** and pushes tags `sha` and `main` for `ghcr.io/<lowercase-owner>/assistant-director-api`.
+1. **Frontend** – `npm ci` at the repo root, then `npm run typecheck:frontend` and `npm run test:sp-screenplay` (Vitest for the [`packages/sp-screenplay`](packages/sp-screenplay/) workspace).
+2. **Backend** – Python 3.11, `pip install -e ".[dev]"` from [`backend/`](backend/) (installs the local [`packages/sp-screenplay-py`](packages/sp-screenplay-py/) dependency), **Ruff**, **pytest** for the API and the screenplay library, and a smoke import of the FastAPI app.
+3. **Docker** – builds the API image with **repository root** as context: `docker build -f backend/Dockerfile .` (see [`backend/Dockerfile`](backend/Dockerfile)). On **push to `main`** only, the workflow logs in to **GHCR** and pushes tags `sha` and `main` for `ghcr.io/<lowercase-owner>/assistant-director-api`.
 
 Enable **branch protection** on `main` and require these checks to pass before merge.
 
 ### API container (Docker)
 
-- **Image:** [`backend/Dockerfile`](backend/Dockerfile) – Python 3.11 slim, non-root user `app`, `uvicorn` on port **8000**, default `BLOB_STORAGE_PATH=/data/blobs`.
+- **Image:** [`backend/Dockerfile`](backend/Dockerfile) – Python 3.11 slim, non-root user `app`, `uvicorn` on port **8000**, default `BLOB_STORAGE_PATH=/data/blobs`. Build from the **repository root**: `docker build -f backend/Dockerfile .`
 - **Runtime env:** set at deploy time (never commit secrets):
   - `DATABASE_URL` – Postgres DSN (same shape as [`backend/src/assistant_director_api/config.py`](backend/src/assistant_director_api/config.py)).
   - `BLOB_STORAGE_PATH` – writable directory for script blobs (use a volume in production).

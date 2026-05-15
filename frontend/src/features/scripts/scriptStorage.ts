@@ -5,9 +5,13 @@ import { authorizationHeader, ensureApiUser } from '../../data/auth/session';
 import { openAssistantDatabase } from '../../data/db/openDatabase';
 import { flushOutbox } from '../../data/sync/outboxFlush';
 import { getLocalProjectForServerEnsure } from '../projects/data/projectRepository';
+import { checkApiReachable } from '../../shared/lib/apiReachability';
 import { getApiBaseUrl } from '../../shared/lib/env';
 
 const MAX_OCTET_STREAM_TEXT_BYTES = 2 * 1024 * 1024;
+const SCRIPT_UPLOAD_TIMEOUT_MS = 60_000;
+
+export type ScriptUploadPhase = 'checking' | 'uploading' | 'caching';
 
 export type ScriptArtifactDto = {
   id: string;
@@ -19,6 +23,33 @@ export type ScriptArtifactDto = {
   created_at: string;
 };
 
+type FastApiValidationDetail = { line?: number; code?: string };
+
+export function formatScriptUploadErrorAlert(rawMessage: string): { title: string; message: string } | null {
+  const trimmed = rawMessage.trim();
+  if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(trimmed) as { detail?: unknown };
+    const detail = parsed.detail;
+    if (typeof detail === 'string') {
+      return { title: 'Invalid screenplay', message: detail };
+    }
+    if (Array.isArray(detail)) {
+      const lines = detail
+        .filter((item): item is FastApiValidationDetail => typeof item === 'object' && item !== null)
+        .slice(0, 2)
+        .map((item) => `Line ${item.line ?? '?'}: ${item.code ?? 'error'}`);
+      const body = ['The server rejected this .sp file.', ...lines].join('\n');
+      return { title: 'Invalid screenplay', message: body };
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
 function cachedBinaryFallbackMessage(mimeType: string, localUri: string): string {
   return `Cached file (${mimeType}) is stored offline. Path: ${localUri}`;
 }
@@ -26,11 +57,6 @@ function cachedBinaryFallbackMessage(mimeType: string, localUri: string): string
 function filenameLooksLikePlainTextScript(fileName: string): boolean {
   const normalized = fileName.trim().toLowerCase();
   return /\.(sp|fountain|txt|md|markdown)$/.test(normalized);
-}
-
-export function isSpScreenplayFileName(fileName: string): boolean {
-  const base = fileName.trim().split(/[/\\]/).pop() ?? '';
-  return base.toLowerCase().endsWith('.sp');
 }
 
 function wrapScriptUploadNetworkError(e: unknown): never {
@@ -83,11 +109,35 @@ async function postScriptMultipartNative(
   }
 }
 
+async function postScriptMultipartWithTimeout(
+  base: string,
+  auth: string,
+  projectId: string,
+  localUri: string,
+  mimeType: string,
+): Promise<{ status: number; bodyText: string }> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error('SCRIPT_UPLOAD_TIMEOUT')), SCRIPT_UPLOAD_TIMEOUT_MS);
+  });
+  try {
+    return await Promise.race([
+      postScriptMultipartNative(base, auth, projectId, localUri, mimeType),
+      timeoutPromise,
+    ]);
+  } finally {
+    if (timeoutId !== undefined) {
+      clearTimeout(timeoutId);
+    }
+  }
+}
+
 export async function uploadScriptForProject(
   projectId: string,
   localUri: string,
   fileName: string,
   mimeType: string,
+  onPhase?: (phase: ScriptUploadPhase) => void,
 ): Promise<ScriptArtifactDto> {
   const db = openAssistantDatabase();
   await ensureApiUser(db);
@@ -102,16 +152,17 @@ export async function uploadScriptForProject(
 
   const uploadUri = await resolveUploadableFileUri(localUri);
 
-  try {
-    await flushOutbox(db);
-  } catch {
-    // outbox sync is best-effort; upload should still run
-  }
+  void flushOutbox(db).catch(() => undefined);
+
+  onPhase?.('checking');
+  await checkApiReachable(base, auth);
+
+  onPhase?.('uploading');
 
   let scriptStatus: number;
   let scriptBodyText: string;
   try {
-    const r1 = await postScriptMultipartNative(base, auth, projectId, uploadUri, mimeType);
+    const r1 = await postScriptMultipartWithTimeout(base, auth, projectId, uploadUri, mimeType);
     scriptStatus = r1.status;
     scriptBodyText = r1.bodyText;
   } catch (e) {
@@ -151,7 +202,7 @@ export async function uploadScriptForProject(
       throw new Error(createText || 'Could not create project on server');
     }
     try {
-      const r2 = await postScriptMultipartNative(base, auth, projectId, uploadUri, mimeType);
+      const r2 = await postScriptMultipartWithTimeout(base, auth, projectId, uploadUri, mimeType);
       scriptStatus = r2.status;
       scriptBodyText = r2.bodyText;
     } catch (e) {
@@ -168,6 +219,7 @@ export async function uploadScriptForProject(
   } catch {
     throw new Error(scriptBodyText || 'Invalid upload response');
   }
+  onPhase?.('caching');
   try {
     await cacheScriptDownload(projectId, art, fileName);
   } catch {

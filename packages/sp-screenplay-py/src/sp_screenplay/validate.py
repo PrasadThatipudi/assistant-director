@@ -3,20 +3,13 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from sp_screenplay.errors import SpScreenplayValidationError
+
 HEADER_TITLE_SCAN_LINE_COUNT = 80
 SCENE_HEADING_PATTERN = re.compile(r"^SCENE\s+\d+\s*$", re.MULTILINE)
 
-SP_SCREENPLAY_MEDIA_TYPE = "text/x-sp; charset=utf-8"
 
-
-class SpScreenplayValidationError(Exception):
-    def __init__(self, detail: str, status_code: int) -> None:
-        super().__init__(detail)
-        self.detail = detail
-        self.status_code = status_code
-
-
-def validate_sp_screenplay_file(*, filename: str | None, data: bytes) -> None:
+def validate_sp_bytes(*, filename: str | None, data: bytes) -> str:
     if not data:
         raise SpScreenplayValidationError("Screenplay file is empty", status_code=400)
 
@@ -52,6 +45,8 @@ def validate_sp_screenplay_file(*, filename: str | None, data: bytes) -> None:
             "Screenplay must include at least one SCENE heading (for example SCENE 1)",
             status_code=400,
         )
+
+    return text
 
 
 def _header_has_title(text: str) -> bool:

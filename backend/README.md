@@ -73,6 +73,14 @@ The `POST /v1/users` response includes `id`. The mobile client uses `Authorizati
 - `POST /v1/projects/{id}/scripts` — multipart script upload.
 - `GET /v1/script-artifacts/{artifact_id}/file` — download bytes for a script the user owns.
 
+## Dev testing: clear all projects
+
+From the repository root, delete every row in `projects` (cascades to `scenes` and `script_artifacts`; does not remove `users` or on-disk blobs):
+
+```bash
+npm run backend:clear-projects
+```
+
 ## Common issues
 
 - **`FATAL: role "assistant" does not exist` on port 5432** — another Postgres instance is bound to 5432. This repo maps Docker Postgres to **5433**; ensure `DATABASE_URL` uses that port.
@@ -80,10 +88,10 @@ The `POST /v1/users` response includes `id`. The mobile client uses `Authorizati
 
 ## Docker image
 
-Build from the `backend/` directory (context must include `pyproject.toml`, `src/`, `alembic/`):
+Build from the **repository root** so the `sp-screenplay` library path in `pyproject.toml` resolves:
 
 ```bash
-docker build -t assistant-director-api:local .
+docker build -f backend/Dockerfile -t assistant-director-api:local .
 ```
 
 Run (example; set `DATABASE_URL` to a reachable Postgres):
