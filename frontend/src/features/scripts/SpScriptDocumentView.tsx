@@ -9,16 +9,22 @@ type Props = {
   document: SpDocument;
 };
 
+function collapsedSetForAllScenes(doc: SpDocument): Set<number> {
+  return new Set(doc.scenes.map((s) => s.number));
+}
+
 export function SpScriptDocumentView({ document }: Props) {
   const headerEntries = Object.entries(document.header);
   const sceneSignature = useMemo(
     () => document.scenes.map((s) => s.number).join(','),
     [document],
   );
-  const [collapsedSceneNumbers, setCollapsedSceneNumbers] = useState<Set<number>>(() => new Set());
+  const [collapsedSceneNumbers, setCollapsedSceneNumbers] = useState<Set<number>>(() =>
+    collapsedSetForAllScenes(document),
+  );
 
   useEffect(() => {
-    setCollapsedSceneNumbers(new Set());
+    setCollapsedSceneNumbers(collapsedSetForAllScenes(document));
   }, [sceneSignature]);
 
   const isCollapsed = useCallback(
@@ -43,8 +49,8 @@ export function SpScriptDocumentView({ document }: Props) {
   }, []);
 
   const collapseAllScenes = useCallback(() => {
-    setCollapsedSceneNumbers(new Set(document.scenes.map((s) => s.number)));
-  }, [document.scenes]);
+    setCollapsedSceneNumbers(collapsedSetForAllScenes(document));
+  }, [document]);
 
   const allScenesCollapsed =
     document.scenes.length > 0 && collapsedSceneNumbers.size === document.scenes.length;
