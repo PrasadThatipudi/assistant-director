@@ -43,9 +43,15 @@ export function SpScriptDocumentView({ document }: Props) {
             const key = `${scene.number}-${idx}`;
             if (block.kind === 'action') {
               return (
-                <View key={key} style={styles.block}>
-                  <Text style={[styles.blockLabel, { color: theme.textSecondary }]}>Action</Text>
-                  <Text style={[styles.actionBody, { color: theme.textPrimary }]}>{block.lines.join('\n')}</Text>
+                <View
+                  key={key}
+                  style={[
+                    styles.noteBlock,
+                    { borderLeftColor: theme.primaryAction, backgroundColor: theme.canvas },
+                  ]}
+                >
+                  <Text style={[styles.blockLabel, { color: theme.primaryAction }]}>Action</Text>
+                  <Text style={[styles.noteBody, { color: theme.textPrimary }]}>{block.lines.join('\n')}</Text>
                 </View>
               );
             }
@@ -119,11 +125,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
-  },
-  actionBody: {
-    fontSize: 15,
-    lineHeight: 22,
-    fontStyle: 'italic',
   },
   noteBlock: {
     borderLeftWidth: 3,
