@@ -1,6 +1,6 @@
 # Assistant Director
 
-Assistant Director is a monorepo for an independent filmmaker companion app: it centralizes production planning on mobile while keeping a proper server database for durability, and it supports **offline-first** project data plus **cached script files** for reading without network access after an initial download.
+Assistant Director is a monorepo for an independent filmmaker companion app: it centralizes production planning on mobile while keeping a proper server database for durability, and it supports **offline-first** project data plus **screenplays that stay on-device only** — the API never stores screenplay bytes; the app validates and parses `.sp` files locally and caches them in sandbox storage for structured reading offline.
 
 ## Context and stack
 
@@ -10,7 +10,7 @@ Assistant Director is a monorepo for an independent filmmaker companion app: it 
 | Local persistence | SQLite (`expo-sqlite`) with an outbox for sync |
 | API | Python 3.11+, FastAPI, SQLAlchemy 2, Alembic |
 | Database | PostgreSQL 16 (Docker), port **5433** on the host to avoid colliding with a local Postgres on 5432 |
-| Script blobs | Filesystem under `BLOB_STORAGE_PATH` (replaceable with S3-compatible storage later) |
+| Screenplays | Stored only on device (app sandbox + SQLite metadata); parsed with [`packages/sp-screenplay`](packages/sp-screenplay/) |
 
 ## Prerequisites
 
@@ -82,9 +82,9 @@ curl -sS http://127.0.0.1:8000/health
 
 ### 3. Run the Expo app
 
-The in-app alert **“Cannot reach the API”** (copy about `EXPO_PUBLIC_API_BASE_URL`) means the **client bundle has no API base URL** yet—it is not the same as “the backend is down.” If the URL is set but the server is stopped, you would normally see **“Script upload”** with a network or HTTP error after the request runs.
+The in-app alert **“Cannot reach the API”** (copy about `EXPO_PUBLIC_API_BASE_URL`) means the **client bundle has no API base URL** yet—it is not the same as “the backend is down.” If the URL is set but the server is stopped, **project sync** requests (outbox) will fail until the API is reachable.
 
-Configure the API URL for the mobile client (required for **script upload** and server sync):
+Configure the API URL for the mobile client (required for **server sync** — screenplays do not need the network):
 
 ```bash
 cp frontend/.env.example frontend/.env
@@ -141,24 +141,21 @@ flowchart LR
     UI[React_Navigation_UI]
     LDB[(SQLite)]
     OB[outbox_table]
-    FS[Script_file_cache]
+    FS[Script_sandbox]
   end
   subgraph server [FastAPI]
     API[REST_endpoints]
     PG[(Postgres)]
-    BLOB[blob_directory]
   end
   UI --> LDB
   UI --> FS
   LDB --> OB
   OB -->|"online_sync"| API
   API --> PG
-  API --> BLOB
-  FS -->|"download"| API
 ```
 
 - **Projects** live in SQLite on device for fast lists and offline edits. Changes are appended to an **outbox** and pushed to `POST /v1/sync/push` when the network is available (last-write-wins using `updated_at`).
-- **Scripts** are uploaded with `POST /v1/projects/{id}/scripts` as UTF-8 **`.sp` screenplay files only** (validated and parsed on the server via the [`packages/sp-screenplay-py`](packages/sp-screenplay-py/) library), then **downloaded into app sandbox storage**. The Script reader uses the shared [`packages/sp-screenplay`](packages/sp-screenplay/) TypeScript parser for an **offline** structured view with a raw-text fallback.
+- **Screenplays (`.sp`)** are **attached on device only**: the file is validated and parsed in the app (via [`packages/sp-screenplay`](packages/sp-screenplay/), imported through a small adapter in [`frontend/src/features/scripts/parsing/`](frontend/src/features/scripts/parsing/)). The server **never** receives screenplay content. **Another device** logged into the same account will **not** get a copy of the script automatically; only project/scene metadata syncs today.
 
 ## Repository layout
 
@@ -166,7 +163,7 @@ flowchart LR
 | :--- | :--- |
 | [`frontend/`](frontend/) | Expo application |
 | [`backend/`](backend/) | FastAPI service and Alembic migrations |
-| [`packages/sp-screenplay-py/`](packages/sp-screenplay-py/) | Reusable Python `.sp` validation and parse library |
+| [`packages/sp-screenplay-py/`](packages/sp-screenplay-py/) | Reference Python `.sp` grammar and tests (CI); not used by the API at runtime |
 | [`packages/sp-screenplay/`](packages/sp-screenplay/) | Reusable TypeScript `.sp` parser (npm workspace) |
 | [`docker-compose.yml`](docker-compose.yml) | PostgreSQL for local development |
 
@@ -178,7 +175,8 @@ flowchart LR
 ## Common issues
 
 - **Metro EMFILE / too many open files (macOS)** — install Watchman.
-- **“Network request failed” on script upload (physical device, Expo Go, `http://` LAN URL)** — Expo Go cannot rely on this project’s cleartext/ATS overrides. Use a **development build** (`npm run dev:ios:frontend` / `npm run dev:android:frontend`) or an **HTTPS** API URL. In-app errors prefixed with `USER_REGISTER_NETWORK:` or `SCRIPT_UPLOAD_NETWORK:` indicate which step failed.
+- **Dev build red screen: `NoSuchMethodError` in `expo.modules.crypto`** — an Expo module version does not match your SDK (for example `expo-crypto` for a newer SDK while the app is on SDK 54). From `frontend/`, run `npx expo install expo-crypto` (or align versions in [`frontend/package.json`](frontend/package.json)), then **`npm run dev:android:frontend`** / **`npm run dev:ios:frontend`** to rebuild the native client; a JS-only reload is not enough.
+- **“Network request failed” during sync (physical device, Expo Go, `http://` LAN URL)** — Expo Go cannot rely on this project’s cleartext/ATS overrides. Use a **development build** (`npm run dev:ios:frontend` / `npm run dev:android:frontend`) or an **HTTPS** API URL. In-app errors prefixed with `USER_REGISTER_NETWORK:` indicate registration failures.
 - **Cannot connect to API from a device** — use your machine LAN IP or `10.0.2.2` on Android emulator, not `localhost` from the phone’s point of view.
 - **Postgres `role "assistant" does not exist` on port 5432** — another Postgres is using 5432. Use the provided Docker mapping on **5433** and the default `DATABASE_URL` in `.env.example`.
 - **`expo run:android`: “No Android connected device found”** — you need a **running emulator** or a **USB-connected phone** with debugging enabled, and `adb devices` must list at least one line in state `device`. See [Android: running the dev client](#android-running-the-dev-client).
@@ -202,7 +200,7 @@ flowchart LR
 | `npm run backend:setup` | Setup virtual environment, dependencies, and migrations |
 | `npm run backend:db` | Start PostgreSQL database only |
 | `npm run backend:stop` | Stop all backend services |
-| `npm run backend:clear-projects` | Delete all projects in local Postgres (cascades scenes and script artifacts; keeps users) |
+| `npm run backend:clear-projects` | Delete all projects in local Postgres (cascades scenes; keeps users) |
 
 ## CI/CD and deployment
 
@@ -211,17 +209,16 @@ flowchart LR
 On every **pull request** and **push** to `main`, [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs:
 
 1. **Frontend** – `npm ci` at the repo root, then `npm run typecheck:frontend` and `npm run test:sp-screenplay` (Vitest for the [`packages/sp-screenplay`](packages/sp-screenplay/) workspace).
-2. **Backend** – Python 3.11, `pip install -e ".[dev]"` from [`backend/`](backend/) (installs the local [`packages/sp-screenplay-py`](packages/sp-screenplay-py/) dependency), **Ruff**, **pytest** for the API and the screenplay library, and a smoke import of the FastAPI app.
+2. **Backend** – Python 3.11, `pip install -e ".[dev]"` from [`backend/`](backend/), **Ruff**, **pytest** for the API, **pytest** for [`packages/sp-screenplay-py`](packages/sp-screenplay-py/) (grammar parity), and a smoke import of the FastAPI app.
 3. **Docker** – builds the API image with **repository root** as context: `docker build -f backend/Dockerfile .` (see [`backend/Dockerfile`](backend/Dockerfile)). On **push to `main`** only, the workflow logs in to **GHCR** and pushes tags `sha` and `main` for `ghcr.io/<lowercase-owner>/assistant-director-api`.
 
 Enable **branch protection** on `main` and require these checks to pass before merge.
 
 ### API container (Docker)
 
-- **Image:** [`backend/Dockerfile`](backend/Dockerfile) – Python 3.11 slim, non-root user `app`, `uvicorn` on port **8000**, default `BLOB_STORAGE_PATH=/data/blobs`. Build from the **repository root**: `docker build -f backend/Dockerfile .`
+- **Image:** [`backend/Dockerfile`](backend/Dockerfile) – Python 3.11 slim, non-root user `app`, `uvicorn` on port **8000**. Build from the **repository root**: `docker build -f backend/Dockerfile .`
 - **Runtime env:** set at deploy time (never commit secrets):
   - `DATABASE_URL` – Postgres DSN (same shape as [`backend/src/assistant_director_api/config.py`](backend/src/assistant_director_api/config.py)).
-  - `BLOB_STORAGE_PATH` – writable directory for script blobs (use a volume in production).
   - `CORS_ALLOW_ORIGINS` – comma-separated allow list; include your **Netlify** site URL and any Expo dev origins you use.
 
 **Migrations:** after the database is up, run `alembic upgrade head` once per deploy (release command, init container, or manual `docker compose run`). Do not rely on CI alone to migrate production.

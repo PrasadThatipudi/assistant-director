@@ -34,9 +34,6 @@ class Project(Base):
 
     owner = relationship("User", back_populates="projects")
     scenes = relationship("Scene", back_populates="project", cascade="all, delete-orphan")
-    script_artifacts = relationship(
-        "ScriptArtifact", back_populates="project", cascade="all, delete-orphan"
-    )
 
 
 class Scene(Base):
@@ -51,18 +48,3 @@ class Scene(Base):
     version = mapped_column(Integer, nullable=False, default=1)
 
     project = relationship("Project", back_populates="scenes")
-
-
-class ScriptArtifact(Base):
-    __tablename__ = "script_artifacts"
-
-    id = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    project_id = mapped_column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
-    version = mapped_column(Integer, nullable=False)
-    storage_key = mapped_column(String(512), nullable=False)
-    content_sha256 = mapped_column(String(64), nullable=False)
-    mime_type = mapped_column(String(128), nullable=False)
-    byte_size = mapped_column(Integer, nullable=False)
-    created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
-
-    project = relationship("Project", back_populates="script_artifacts")

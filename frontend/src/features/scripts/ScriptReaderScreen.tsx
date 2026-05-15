@@ -8,11 +8,10 @@ import {
   View,
 } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { parseSpDocument, parseResultOk } from '@assistant-director/sp-screenplay';
-
 import type { RootStackParamList } from '../../shell/navigationTypes';
 import { theme } from '../../shell/theme';
 import { Screen } from '../../shared/ui/Screen';
+import { parseResultOk, parseSpDocument } from './parsing/scriptParsingAdapter';
 import { readCachedScriptAsText } from './scriptStorage';
 import { SpScriptDocumentView } from './SpScriptDocumentView';
 
@@ -43,36 +42,6 @@ export function ScriptReaderScreen({ route }: Props) {
     body != null && !body.startsWith('Cached file (') ? parseSpDocument(body) : null;
   const parsedOk = parseOutcome != null && parseResultOk(parseOutcome);
 
-  useEffect(() => {
-    if (loading || body == null) {
-      return;
-    }
-    const po =
-      !body.startsWith('Cached file (') ? parseSpDocument(body) : null;
-    const ok = po != null && parseResultOk(po);
-    // #region agent log
-    fetch('http://127.0.0.1:7573/ingest/a4a749da-e3a0-4f3c-a932-73e321747efb', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'b61b79' },
-        body: JSON.stringify({
-          sessionId: 'b61b79',
-          runId: 'post-fix',
-          hypothesisId: 'H3',
-        location: 'ScriptReaderScreen.tsx:useEffect',
-        message: 'script_parse_state',
-        data: {
-          bodyLen: body.length,
-          bodyStartsCached: body.startsWith('Cached file ('),
-          parsedOk: ok,
-          errorCount: po?.errors.length ?? 0,
-          errorCodes: (po?.errors ?? []).slice(0, 5).map((e) => e.code),
-        },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-    // #endregion
-  }, [loading, body, projectId]);
-
   if (loading) {
     return (
       <Screen>
@@ -84,7 +53,9 @@ export function ScriptReaderScreen({ route }: Props) {
   if (body == null) {
     return (
       <Screen>
-        <Text style={styles.muted}>No cached script for this project. Upload while online first.</Text>
+        <Text style={styles.muted}>
+          No script for this project. Attach a .sp file from the project detail screen.
+        </Text>
       </Screen>
     );
   }

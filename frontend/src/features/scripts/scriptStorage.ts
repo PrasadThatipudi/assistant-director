@@ -1,31 +1,24 @@
+import * as Crypto from 'expo-crypto';
 import * as FileSystem from 'expo-file-system/legacy';
-import { FileSystemUploadType } from 'expo-file-system/legacy';
 
-import { authorizationHeader, ensureApiUser } from '../../data/auth/session';
 import { openAssistantDatabase } from '../../data/db/openDatabase';
-import { flushOutbox } from '../../data/sync/outboxFlush';
-import { getLocalProjectForServerEnsure } from '../projects/data/projectRepository';
-import { checkApiReachable } from '../../shared/lib/apiReachability';
-import { getApiBaseUrl } from '../../shared/lib/env';
+import { parseResultOk, parseSpDocument } from './parsing/scriptParsingAdapter';
 
 const MAX_OCTET_STREAM_TEXT_BYTES = 2 * 1024 * 1024;
-const SCRIPT_UPLOAD_TIMEOUT_MS = 60_000;
+const MAX_SCRIPT_BYTES = 20 * 1024 * 1024;
 
-export type ScriptUploadPhase = 'checking' | 'uploading' | 'caching';
+export type ScriptImportPhase = 'validating' | 'saving';
 
-export type ScriptArtifactDto = {
-  id: string;
-  project_id: string;
+export type LocalScriptAttachment = {
+  projectId: string;
+  localAssetId: string;
   version: number;
-  content_sha256: string;
-  mime_type: string;
-  byte_size: number;
-  created_at: string;
+  sourceFilename: string | null;
 };
 
-type FastApiValidationDetail = { line?: number; code?: string };
+type FastApiStyleDetailItem = { line?: number; code?: string };
 
-export function formatScriptUploadErrorAlert(rawMessage: string): { title: string; message: string } | null {
+export function formatScriptValidationError(rawMessage: string): { title: string; message: string } | null {
   const trimmed = rawMessage.trim();
   if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) {
     return null;
@@ -38,10 +31,10 @@ export function formatScriptUploadErrorAlert(rawMessage: string): { title: strin
     }
     if (Array.isArray(detail)) {
       const lines = detail
-        .filter((item): item is FastApiValidationDetail => typeof item === 'object' && item !== null)
+        .filter((item): item is FastApiStyleDetailItem => typeof item === 'object' && item !== null)
         .slice(0, 2)
         .map((item) => `Line ${item.line ?? '?'}: ${item.code ?? 'error'}`);
-      const body = ['The server rejected this .sp file.', ...lines].join('\n');
+      const body = ['This .sp file could not be parsed.', ...lines].join('\n');
       return { title: 'Invalid screenplay', message: body };
     }
   } catch {
@@ -59,214 +52,115 @@ function filenameLooksLikePlainTextScript(fileName: string): boolean {
   return /\.(sp|fountain|txt|md|markdown)$/.test(normalized);
 }
 
-function wrapScriptUploadNetworkError(e: unknown): never {
+function wrapScriptImportError(label: string, e: unknown): never {
   const detail = e instanceof Error ? e.message : String(e);
-  if (detail.startsWith('SCRIPT_UPLOAD_NETWORK:')) {
-    throw e instanceof Error ? e : new Error(detail);
-  }
-  throw new Error(`SCRIPT_UPLOAD_NETWORK: ${detail}`);
+  throw new Error(`${label}: ${detail}`);
 }
 
-async function resolveUploadableFileUri(localUri: string): Promise<string> {
+async function resolveReadableFileUri(localUri: string): Promise<string> {
   if (!localUri.toLowerCase().startsWith('content://')) {
     return localUri;
   }
   const cacheRoot = FileSystem.cacheDirectory;
   if (!cacheRoot) {
-    throw new Error('SCRIPT_UPLOAD_NETWORK: cache directory unavailable');
+    throw new Error('SCRIPT_IMPORT_CACHE_UNAVAILABLE: cache directory unavailable');
   }
-  const dest = `${cacheRoot}script-upload-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  const dest = `${cacheRoot}script-import-${Date.now()}-${Math.random().toString(16).slice(2)}`;
   try {
     await FileSystem.copyAsync({ from: localUri, to: dest });
   } catch (e) {
-    wrapScriptUploadNetworkError(e);
+    wrapScriptImportError('SCRIPT_IMPORT_COPY', e);
   }
   return dest;
 }
 
-async function postScriptMultipartNative(
-  base: string,
-  auth: string,
-  projectId: string,
-  localUri: string,
-  mimeType: string,
-): Promise<{ status: number; bodyText: string }> {
-  const url = `${base}/v1/projects/${projectId}/scripts`;
-  try {
-    const result = await FileSystem.uploadAsync(url, localUri, {
-      httpMethod: 'POST',
-      uploadType: FileSystemUploadType.MULTIPART,
-      fieldName: 'file',
-      mimeType,
-      headers: {
-        Authorization: auth,
-        Accept: 'application/json',
-      },
-    });
-    return { status: result.status, bodyText: result.body };
-  } catch (e) {
-    wrapScriptUploadNetworkError(e);
-  }
+function utf8ByteLength(text: string): number {
+  return new TextEncoder().encode(text).length;
 }
 
-async function postScriptMultipartWithTimeout(
-  base: string,
-  auth: string,
-  projectId: string,
-  localUri: string,
-  mimeType: string,
-): Promise<{ status: number; bodyText: string }> {
-  let timeoutId: ReturnType<typeof setTimeout> | undefined;
-  const timeoutPromise = new Promise<never>((_, reject) => {
-    timeoutId = setTimeout(() => reject(new Error('SCRIPT_UPLOAD_TIMEOUT')), SCRIPT_UPLOAD_TIMEOUT_MS);
-  });
-  try {
-    return await Promise.race([
-      postScriptMultipartNative(base, auth, projectId, localUri, mimeType),
-      timeoutPromise,
-    ]);
-  } finally {
-    if (timeoutId !== undefined) {
-      clearTimeout(timeoutId);
-    }
-  }
-}
-
-export async function uploadScriptForProject(
+export async function importScriptForProjectLocally(
   projectId: string,
   localUri: string,
   fileName: string,
   mimeType: string,
-  onPhase?: (phase: ScriptUploadPhase) => void,
-): Promise<ScriptArtifactDto> {
+  onPhase?: (phase: ScriptImportPhase) => void,
+): Promise<LocalScriptAttachment> {
   const db = openAssistantDatabase();
-  await ensureApiUser(db);
-  const base = getApiBaseUrl();
-  const auth = authorizationHeader(db);
-  if (!base || !auth) {
-    if (!base) {
-      throw new Error('API is not configured. Set EXPO_PUBLIC_API_BASE_URL to upload.');
-    }
-    throw new Error('AUTH_REQUIRED_FOR_UPLOAD');
+  const readUri = await resolveReadableFileUri(localUri);
+  const info = await FileSystem.getInfoAsync(readUri);
+  if (!info.exists || typeof info.size !== 'number') {
+    throw new Error('SCRIPT_IMPORT_READ: file not found');
+  }
+  if (info.size > MAX_SCRIPT_BYTES) {
+    throw new Error('SCRIPT_IMPORT_TOO_LARGE: file exceeds 20MB limit');
   }
 
-  const uploadUri = await resolveUploadableFileUri(localUri);
-
-  void flushOutbox(db).catch(() => undefined);
-
-  onPhase?.('checking');
-  await checkApiReachable(base, auth);
-
-  onPhase?.('uploading');
-
-  let scriptStatus: number;
-  let scriptBodyText: string;
+  let text: string;
   try {
-    const r1 = await postScriptMultipartWithTimeout(base, auth, projectId, uploadUri, mimeType);
-    scriptStatus = r1.status;
-    scriptBodyText = r1.bodyText;
+    text = await FileSystem.readAsStringAsync(readUri, { encoding: FileSystem.EncodingType.UTF8 });
   } catch (e) {
-    wrapScriptUploadNetworkError(e);
+    wrapScriptImportError('SCRIPT_IMPORT_READ', e);
   }
 
-  if (scriptStatus === 404) {
-    const errText = scriptBodyText;
-    if (!errText.includes('Project not found')) {
-      throw new Error(errText || 'Upload failed');
-    }
-    const local = getLocalProjectForServerEnsure(db, projectId);
-    if (!local) {
-      throw new Error(errText || 'Upload failed');
-    }
-    let createRes: Response;
-    try {
-      createRes = await fetch(`${base}/v1/projects`, {
-        method: 'POST',
-        headers: {
-          Authorization: auth,
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-        },
-        body: JSON.stringify({
-          id: projectId,
-          title: local.title,
-          description: local.description,
-        }),
-      });
-    } catch (e) {
-      const detail = e instanceof Error ? e.message : String(e);
-      throw new Error(`CREATE_PROJECT_NETWORK: ${detail}`);
-    }
-    if (!createRes.ok && createRes.status !== 409) {
-      const createText = await createRes.text();
-      throw new Error(createText || 'Could not create project on server');
-    }
-    try {
-      const r2 = await postScriptMultipartWithTimeout(base, auth, projectId, uploadUri, mimeType);
-      scriptStatus = r2.status;
-      scriptBodyText = r2.bodyText;
-    } catch (e) {
-      wrapScriptUploadNetworkError(e);
-    }
+  if (utf8ByteLength(text) > MAX_SCRIPT_BYTES) {
+    throw new Error('SCRIPT_IMPORT_TOO_LARGE: file exceeds 20MB limit');
   }
 
-  if (scriptStatus < 200 || scriptStatus > 299) {
-    throw new Error(scriptBodyText || 'Upload failed');
+  onPhase?.('validating');
+  const parseOutcome = parseSpDocument(text);
+  if (!parseResultOk(parseOutcome)) {
+    const detail = parseOutcome.errors.map((err) => ({ line: err.line, code: err.code }));
+    throw new Error(JSON.stringify({ detail }));
   }
-  let art: ScriptArtifactDto;
-  try {
-    art = JSON.parse(scriptBodyText) as ScriptArtifactDto;
-  } catch {
-    throw new Error(scriptBodyText || 'Invalid upload response');
-  }
-  onPhase?.('caching');
-  try {
-    await cacheScriptDownload(projectId, art, fileName);
-  } catch {
-    // artifact exists on server; local cache can be retried later
-  }
-  return art;
-}
 
-export async function cacheScriptDownload(
-  projectId: string,
-  art: ScriptArtifactDto,
-  sourceFilename?: string,
-): Promise<void> {
-  const db = openAssistantDatabase();
-  const base = getApiBaseUrl();
-  const auth = authorizationHeader(db);
-  if (!base || !auth) {
-    return;
-  }
+  onPhase?.('saving');
+  const localAssetId = Crypto.randomUUID();
   const root = FileSystem.documentDirectory ?? '';
   const dir = `${root}scripts`;
   await FileSystem.makeDirectoryAsync(dir, { intermediates: true }).catch(() => undefined);
-  const dest = `${dir}/${art.id}`;
-  const result = await FileSystem.downloadAsync(`${base}/v1/script-artifacts/${art.id}/file`, dest, {
-    headers: { Authorization: auth },
-  });
-  if (result.status !== 200) {
-    throw new Error('Download failed');
+  const dest = `${dir}/${localAssetId}.sp`;
+  try {
+    await FileSystem.writeAsStringAsync(dest, text, { encoding: FileSystem.EncodingType.UTF8 });
+  } catch (e) {
+    wrapScriptImportError('SCRIPT_IMPORT_WRITE', e);
   }
+
+  const contentSha256 = await Crypto.digestStringAsync(
+    Crypto.CryptoDigestAlgorithm.SHA256,
+    text,
+  );
+  const byteSize = utf8ByteLength(text);
   const now = new Date().toISOString();
+  const prior = db.getFirstSync<{ version: number }>(
+    'SELECT version FROM script_cache WHERE project_id = ?',
+    projectId,
+  );
+  const nextVersion = (prior?.version ?? 0) + 1;
+
   db.runSync(
-    `INSERT OR REPLACE INTO script_cache (project_id, artifact_id, version, content_sha256, mime_type, local_uri, byte_size, updated_at, source_filename)
+    `INSERT OR REPLACE INTO script_cache (project_id, local_asset_id, version, content_sha256, mime_type, local_uri, byte_size, updated_at, source_filename)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     projectId,
-    art.id,
-    art.version,
-    art.content_sha256,
-    art.mime_type,
-    result.uri,
-    art.byte_size,
+    localAssetId,
+    nextVersion,
+    contentSha256,
+    mimeType,
+    dest,
+    byteSize,
     now,
-    sourceFilename ?? null,
+    fileName.trim() ? fileName : null,
   );
+
+  return {
+    projectId,
+    localAssetId,
+    version: nextVersion,
+    sourceFilename: fileName.trim() ? fileName : null,
+  };
 }
 
 export function getScriptCacheRow(projectId: string): {
-  artifactId: string;
+  localAssetId: string;
   mimeType: string;
   localUri: string;
   version: number;
@@ -274,20 +168,20 @@ export function getScriptCacheRow(projectId: string): {
 } | null {
   const db = openAssistantDatabase();
   const row = db.getFirstSync<{
-    artifact_id: string;
+    local_asset_id: string;
     mime_type: string;
     local_uri: string;
     version: number;
     source_filename: string | null;
   }>(
-    'SELECT artifact_id, mime_type, local_uri, version, source_filename FROM script_cache WHERE project_id = ?',
+    'SELECT local_asset_id, mime_type, local_uri, version, source_filename FROM script_cache WHERE project_id = ?',
     projectId,
   );
   if (!row) {
     return null;
   }
   return {
-    artifactId: row.artifact_id,
+    localAssetId: row.local_asset_id,
     mimeType: row.mime_type,
     localUri: row.local_uri,
     version: row.version,

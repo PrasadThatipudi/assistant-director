@@ -67,5 +67,46 @@ export function runMigrations(db: SQLiteDatabase): void {
       db.execSync('ALTER TABLE script_cache ADD COLUMN source_filename TEXT');
     }
     db.execSync('PRAGMA user_version = 2');
+    version = 2;
+  }
+
+  if (version < 3) {
+    const cacheExists = db.getFirstSync<{ name: string | null }>(
+      'SELECT name FROM sqlite_master WHERE type = ? AND name = ?',
+      'table',
+      'script_cache',
+    );
+    if (cacheExists?.name === 'script_cache') {
+      db.execSync(`
+        CREATE TABLE script_cache_local (
+          project_id TEXT PRIMARY KEY NOT NULL,
+          local_asset_id TEXT NOT NULL,
+          version INTEGER NOT NULL DEFAULT 1,
+          content_sha256 TEXT NOT NULL,
+          mime_type TEXT NOT NULL,
+          local_uri TEXT NOT NULL,
+          byte_size INTEGER NOT NULL,
+          updated_at TEXT NOT NULL,
+          source_filename TEXT
+        );
+        INSERT INTO script_cache_local (
+          project_id, local_asset_id, version, content_sha256, mime_type,
+          local_uri, byte_size, updated_at, source_filename
+        )
+        SELECT project_id,
+               artifact_id,
+               CASE WHEN version IS NULL OR version < 1 THEN 1 ELSE version END,
+               content_sha256,
+               mime_type,
+               local_uri,
+               byte_size,
+               updated_at,
+               source_filename
+        FROM script_cache;
+        DROP TABLE script_cache;
+        ALTER TABLE script_cache_local RENAME TO script_cache;
+      `);
+    }
+    db.execSync('PRAGMA user_version = 3');
   }
 }

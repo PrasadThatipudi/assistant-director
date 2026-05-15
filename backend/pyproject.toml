@@ -16,7 +16,6 @@ dependencies = [
   "alembic==1.14.1",
   "pydantic-settings==2.7.1",
   "python-multipart==0.0.20",
-  "sp-screenplay @ file:../packages/sp-screenplay-py",
 ]
 
 [project.optional-dependencies]

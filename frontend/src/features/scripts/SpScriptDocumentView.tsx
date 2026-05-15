@@ -1,6 +1,6 @@
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import type { SpDocument } from '@assistant-director/sp-screenplay';
+import type { SpDocument } from './parsing/scriptParsingAdapter';
 
 import { theme } from '../../shell/theme';
 

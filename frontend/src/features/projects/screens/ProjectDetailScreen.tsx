@@ -8,31 +8,24 @@ import type { RootStackParamList } from '../../../shell/navigationTypes';
 import { theme } from '../../../shell/theme';
 import { PrimaryButton } from '../../../shared/ui/PrimaryButton';
 import { Screen } from '../../../shared/ui/Screen';
-import { useBootstrap } from '../../../shared/context/BootstrapContext';
-import { isSpScreenplayFileName } from '@assistant-director/sp-screenplay';
 import {
-  formatScriptUploadErrorAlert,
+  formatScriptValidationError,
   getScriptCacheRow,
-  type ScriptUploadPhase,
-  uploadScriptForProject,
-} from '../../scripts/scriptStorage';
+  importScriptForProjectLocally,
+  isSpScreenplayFileName,
+  type ScriptImportPhase,
+} from '../../scripts';
 import { getApiBaseUrl } from '../../../shared/lib/env';
 import { projectRepository } from '../data/projectRepository';
 import { useProject } from '../hooks/useProject';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ProjectDetail'>;
 
-const API_UNREACHABLE_MESSAGE =
-  'Check Wi‑Fi and that the backend is running. Expo Go often cannot use http:// to your computer — use a development build or an https:// API URL.';
-
-function uploadPhaseLabel(phase: ScriptUploadPhase): string {
-  if (phase === 'checking') {
-    return 'Checking connection…';
+function importPhaseLabel(phase: ScriptImportPhase): string {
+  if (phase === 'validating') {
+    return 'Validating screenplay…';
   }
-  if (phase === 'uploading') {
-    return 'Uploading…';
-  }
-  return 'Saving offline copy…';
+  return 'Saving on this device…';
 }
 
 function shouldShowExpoGoHttpBanner(): boolean {
@@ -53,10 +46,9 @@ function formatTimestamp(iso: string): string {
 export function ProjectDetailScreen({ navigation, route }: Props) {
   const { projectId } = route.params;
   const { project, loading, refresh } = useProject(projectId);
-  const { canPerformOperations, isOfflineMode, bootstrapState } = useBootstrap();
   const [scriptMeta, setScriptMeta] = useState<ReturnType<typeof getScriptCacheRow>>(null);
-  const [scriptUploading, setScriptUploading] = useState(false);
-  const [scriptUploadPhase, setScriptUploadPhase] = useState<ScriptUploadPhase | null>(null);
+  const [scriptImporting, setScriptImporting] = useState(false);
+  const [scriptImportPhase, setScriptImportPhase] = useState<ScriptImportPhase | null>(null);
   const [expoGoBannerDismissed, setExpoGoBannerDismissed] = useState(false);
 
   useFocusEffect(
@@ -120,18 +112,7 @@ export function ProjectDetailScreen({ navigation, route }: Props) {
     );
   };
 
-  const pickAndUploadScript = async () => {
-    // Check bootstrap state before allowing upload
-    if (!canPerformOperations) {
-      Alert.alert(
-        'App not ready',
-        bootstrapState === 'loading' || bootstrapState === 'retrying'
-          ? 'The app is still initializing. Please wait a moment and try again.'
-          : 'App initialization failed. Please restart the app or check your connection.',
-      );
-      return;
-    }
-
+  const pickAndAttachScript = async () => {
     try {
       const picked = await DocumentPicker.getDocumentAsync({ copyToCacheDirectory: true });
       if (picked.canceled || !picked.assets?.length) {
@@ -142,97 +123,57 @@ export function ProjectDetailScreen({ navigation, route }: Props) {
       if (!isSpScreenplayFileName(pickedName)) {
         Alert.alert(
           'Wrong file type',
-          'Only .sp screenplay files can be uploaded. Save or export your script with the .sp extension and try again.',
+          'Only .sp screenplay files can be attached. Save or export your script with the .sp extension and try again.',
         );
         return;
       }
 
-      setScriptUploading(true);
-      setScriptUploadPhase('checking');
-      const artifact = await uploadScriptForProject(
+      setScriptImporting(true);
+      setScriptImportPhase('validating');
+      const attachment = await importScriptForProjectLocally(
         project.id,
         asset.uri,
         pickedName,
         'text/x-sp',
-        (phase) => setScriptUploadPhase(phase),
+        (phase) => setScriptImportPhase(phase),
       );
       setScriptMeta(getScriptCacheRow(project.id));
 
-      const successMessage = isOfflineMode
-        ? `"${pickedName}" was saved locally. It will sync when you go online.`
-        : `"${pickedName}" was uploaded successfully (version ${artifact.version}) and saved for offline reading.`;
+      const successMessage = `"${pickedName}" is saved on this device only (v${attachment.version}). The server never receives your screenplay bytes.`;
 
-      const cachedAfterUpload = getScriptCacheRow(project.id);
+      const cachedAfterImport = getScriptCacheRow(project.id);
       const alertButtons: { text: string; style?: 'cancel'; onPress?: () => void }[] = [
         { text: 'OK', style: 'cancel' },
       ];
-      if (cachedAfterUpload) {
+      if (cachedAfterImport) {
         alertButtons.unshift({
-          text: 'View script',
+          text: 'Open script',
           onPress: () => navigation.navigate('ScriptReader', { projectId: project.id }),
         });
       }
-      Alert.alert('Upload successful', successMessage, alertButtons);
+      Alert.alert('Script attached', successMessage, alertButtons);
     } catch (e) {
-      const message = e instanceof Error ? e.message : 'Upload failed';
-      const validationAlert = formatScriptUploadErrorAlert(message);
+      const message = e instanceof Error ? e.message : 'Import failed';
+      const validationAlert = formatScriptValidationError(message);
       if (validationAlert) {
         Alert.alert(validationAlert.title, validationAlert.message);
         return;
       }
-      if (message.includes('API is not configured')) {
+      if (message.includes('SCRIPT_IMPORT_TOO_LARGE')) {
+        Alert.alert('File too large', 'Choose a screenplay under 20 MB.');
+        return;
+      }
+      if (message.startsWith('SCRIPT_IMPORT_')) {
         Alert.alert(
-          'Backend not configured',
-          'The API endpoint is not set. Check that EXPO_PUBLIC_API_BASE_URL is set in frontend/.env and restart Metro.',
+          'Could not save script',
+          'The file could not be read or written to secure storage on this device. Try picking the file again.',
         );
         return;
       }
-      if (message.includes('AUTH_REQUIRED_FOR_UPLOAD') || message.includes('Unknown user')) {
-        Alert.alert(
-          'Authentication issue',
-          'The app cannot authenticate with the server. This may happen if the app started while offline. Try restarting the app with a network connection.',
-        );
-        return;
-      }
-      if (message.includes('Project not found')) {
-        Alert.alert(
-          'Project sync pending',
-          'This project hasn\'t synced to the server yet. In offline mode, scripts are saved locally and will upload when you go online.',
-        );
-        return;
-      }
-      if (message.includes('USER_REGISTER_NETWORK:')) {
-        Alert.alert(
-          'Network connection issue',
-          'Expo Go often blocks plain HTTP to your computer on Wi‑Fi. Use a development build (`expo run:ios` / `expo run:android` after installing dependencies) so native settings apply, or point EXPO_PUBLIC_API_BASE_URL at an HTTPS URL (e.g. ngrok). See the README section “Expo Go, LAN HTTP, and development builds”.',
-        );
-        return;
-      }
-      if (
-        message.includes('SCRIPT_UPLOAD_UNREACHABLE') ||
-        message.includes('SCRIPT_UPLOAD_NETWORK:')
-      ) {
-        Alert.alert('Cannot reach API', API_UNREACHABLE_MESSAGE);
-        return;
-      }
-      if (message.includes('SCRIPT_UPLOAD_TIMEOUT')) {
-        Alert.alert(
-          'Upload timed out',
-          'The server did not respond in time. Check the API URL and try again.',
-        );
-        return;
-      }
-      if (message.includes('CREATE_PROJECT_NETWORK:')) {
-        Alert.alert(
-          'Could not create project on server',
-          'The device could not reach the API over the network. Check EXPO_PUBLIC_API_BASE_URL, Wi‑Fi, and whether you are on Expo Go with plain HTTP (see README).',
-        );
-        return;
-      }
-      Alert.alert('Upload failed', message);
+      Alert.alert('Import failed', message);
     } finally {
-      setScriptUploading(false);
-      setScriptUploadPhase(null);
+      setScriptImporting(false);
+      setScriptImportPhase(null);
     }
   };
 
@@ -276,8 +217,8 @@ export function ProjectDetailScreen({ navigation, route }: Props) {
           {shouldShowExpoGoHttpBanner() && !expoGoBannerDismissed ? (
             <View style={styles.expoGoBanner}>
               <Text style={styles.expoGoBannerText}>
-                Script upload may fail in Expo Go with http://. Use a development build or an https:// API
-                URL.
+                Sync and registration may fail in Expo Go with http:// to your computer. Use a development
+                build or an https:// API URL.
               </Text>
               <Pressable
                 accessibilityRole="button"
@@ -288,32 +229,34 @@ export function ProjectDetailScreen({ navigation, route }: Props) {
               </Pressable>
             </View>
           ) : null}
-          <Text style={styles.metaLabel}>Script (offline cache)</Text>
+          <Text style={styles.metaLabel}>Script (this device)</Text>
           {scriptMeta ? (
             <>
               <Text style={styles.metaValue}>
-                Cached v{scriptMeta.version} — {scriptMeta.mimeType}
+                v{scriptMeta.version} — {scriptMeta.mimeType}
               </Text>
               <PrimaryButton
-                label="Open cached script"
-                disabled={scriptUploading}
+                label="Open script"
+                disabled={scriptImporting}
                 onPress={() => navigation.navigate('ScriptReader', { projectId: project.id })}
               />
             </>
           ) : (
-            <Text style={styles.helper}>Upload while online to keep a local copy for offline reading.</Text>
+            <Text style={styles.helper}>
+              Attach a .sp screenplay. Files stay only on this device; they are never sent to the server.
+            </Text>
           )}
-          {scriptUploading && scriptUploadPhase ? (
+          {scriptImporting && scriptImportPhase ? (
             <View style={styles.uploadingRow}>
               <ActivityIndicator color={theme.primaryAction} size="small" />
-              <Text style={styles.uploadingText}>{uploadPhaseLabel(scriptUploadPhase)}</Text>
+              <Text style={styles.uploadingText}>{importPhaseLabel(scriptImportPhase)}</Text>
             </View>
           ) : null}
           <PrimaryButton
-            label={scriptUploading ? 'Uploading…' : 'Upload script'}
+            label={scriptImporting ? 'Importing…' : 'Attach script'}
             variant="secondary"
-            disabled={scriptUploading}
-            onPress={() => void pickAndUploadScript()}
+            disabled={scriptImporting}
+            onPress={() => void pickAndAttachScript()}
           />
         </View>
 

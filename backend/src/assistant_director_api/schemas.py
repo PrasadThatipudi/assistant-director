@@ -78,18 +78,6 @@ class SceneResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class ScriptArtifactResponse(BaseModel):
-    id: uuid.UUID
-    project_id: uuid.UUID
-    version: int
-    content_sha256: str
-    mime_type: str
-    byte_size: int
-    created_at: datetime
-
-    model_config = {"from_attributes": True}
-
-
 class SyncOperation(BaseModel):
     client_op_id: str = Field(min_length=1, max_length=64)
     entity_type: Literal["project", "scene"]

@@ -1,6 +1,6 @@
 # Assistant Director API
 
-FastAPI service backed by PostgreSQL. Script binaries are stored on the local filesystem under `BLOB_STORAGE_PATH` (S3-compatible storage can replace this later without changing the API contract).
+FastAPI service backed by PostgreSQL. **Screenplay files stay on devices only** — the API does not store script bytes.
 
 ## Prerequisites
 
@@ -22,7 +22,6 @@ Important variables:
 | Variable | Purpose |
 | :--- | :--- |
 | `DATABASE_URL` | SQLAlchemy URL. Default points at Docker Postgres on host port **5433** (avoids clashing with a local Postgres on 5432). |
-| `BLOB_STORAGE_PATH` | Directory for uploaded script blobs (created automatically). |
 | `CORS_ALLOW_ORIGINS` | Comma-separated list of allowed web origins for Expo web and dev tools. |
 
 ## Database (Docker + Alembic)
@@ -70,12 +69,10 @@ The `POST /v1/users` response includes `id`. The mobile client uses `Authorizati
 - `GET|POST|PATCH /v1/projects` — project CRUD for the authenticated user.
 - `GET|POST|PATCH|DELETE /v1/projects/{id}/scenes` — scene CRUD.
 - `POST /v1/sync/push` — batch outbox sync with last-write-wins semantics on `updated_at`.
-- `POST /v1/projects/{id}/scripts` — multipart script upload.
-- `GET /v1/script-artifacts/{artifact_id}/file` — download bytes for a script the user owns.
 
 ## Dev testing: clear all projects
 
-From the repository root, delete every row in `projects` (cascades to `scenes` and `script_artifacts`; does not remove `users` or on-disk blobs):
+From the repository root, delete every row in `projects` (cascades to `scenes`; does not remove `users`):
 
 ```bash
 npm run backend:clear-projects
@@ -88,7 +85,7 @@ npm run backend:clear-projects
 
 ## Docker image
 
-Build from the **repository root** so the `sp-screenplay` library path in `pyproject.toml` resolves:
+Build from the **repository root**:
 
 ```bash
 docker build -f backend/Dockerfile -t assistant-director-api:local .
@@ -99,7 +96,6 @@ Run (example; set `DATABASE_URL` to a reachable Postgres):
 ```bash
 docker run --rm -p 8000:8000 \
   -e DATABASE_URL=postgresql+psycopg://assistant:assistant@host.docker.internal:5433/assistant_director \
-  -e BLOB_STORAGE_PATH=/data/blobs \
   -e CORS_ALLOW_ORIGINS=http://localhost:8081 \
   assistant-director-api:local
 ```
