@@ -16,7 +16,6 @@ services:
     dockerfilePath: ./backend/Dockerfile
     dockerContext: .
     healthCheckPath: /health
-    dockerCommand: sh -c "alembic upgrade head && exec uvicorn assistant_director_api.main:app --host 0.0.0.0 --port ${PORT:-10000}"
     envVars:
       - key: DATABASE_URL
         fromDatabase:

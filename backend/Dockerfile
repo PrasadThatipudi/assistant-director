@@ -30,5 +30,5 @@ EXPOSE 8000
 ENV DATABASE_URL=postgresql+psycopg://assistant:assistant@localhost:5432/assistant_director \
     CORS_ALLOW_ORIGINS=http://localhost:8081
 
-# Render sets PORT; default 8000 for local docker compose.
-CMD ["sh", "-c", "exec uvicorn assistant_director_api.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+# Render sets PORT; default 8000 for local docker compose. Migrations run before each start.
+CMD ["sh", "-c", "alembic upgrade head && exec uvicorn assistant_director_api.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
