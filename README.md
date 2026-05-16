@@ -224,6 +224,37 @@ You can also trigger a deploy manually: **Actions → CI and Deploy → Run work
 
 Enable **branch protection** on `main` and require the test jobs to pass before merge.
 
+#### Pre-commit hooks (catch failures before push)
+
+Install [pre-commit](https://pre-commit.com/) once, then hooks run automatically on `git commit`:
+
+```bash
+pip install pre-commit
+pre-commit install
+```
+
+Hooks mirror the fast CI checks (see [`.pre-commit-config.yaml`](.pre-commit-config.yaml)):
+
+- **Ruff** on `backend/src` and `backend/tests` (same rule set as CI; fixes the unused-import class of failures)
+- **TypeScript** typecheck when `frontend/` or `packages/sp-screenplay/` changes
+- **Vitest** for frontend and screenplay package when relevant files change
+
+Run every hook on the whole repo without committing:
+
+```bash
+pre-commit run --all-files
+```
+
+Hook environments use your system **Python 3.11+** (no fixed minor version in config). If pre-commit fails after a Python upgrade or config change, reset cached envs:
+
+```bash
+pre-commit clean
+pre-commit install
+pre-commit run --all-files
+```
+
+Backend **pytest** (Postgres integration tests) is not in pre-commit because it needs a database; CI still runs it on every PR.
+
 #### GitHub repository secrets
 
 Configure under **Settings → Secrets and variables → Actions**:

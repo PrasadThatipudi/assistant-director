@@ -9,9 +9,9 @@ export function BackendConnectivityTest() {
   const testConnectivity = async () => {
     setTesting(true);
     setLastResult('Testing...');
-    
+
     const base = getApiBaseUrl();
-    
+
     if (!base) {
       setLastResult('❌ No API base URL configured');
       setTesting(false);
@@ -27,7 +27,7 @@ export function BackendConnectivityTest() {
         method: 'GET',
         headers: { Accept: 'application/json' },
       });
-      
+
       if (healthResponse.ok) {
         const healthData = await healthResponse.text();
         console.log('[ConnectivityTest] Health check successful:', healthData);
@@ -44,13 +44,13 @@ export function BackendConnectivityTest() {
       const email = `test-${Date.now()}@connectivity.test`;
       const userResponse = await fetch(`${base}/v1/users`, {
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
           Accept: 'application/json'
         },
         body: JSON.stringify({ email }),
       });
-      
+
       if (userResponse.ok) {
         const userData = await userResponse.json();
         console.log('[ConnectivityTest] User registration successful:', userData);
@@ -80,9 +80,9 @@ export function BackendConnectivityTest() {
     <View style={styles.container}>
       <Text style={styles.title}>Backend Connectivity Test</Text>
       <Text style={styles.url}>API: {getApiBaseUrl() || 'Not configured'}</Text>
-      
-      <Pressable 
-        style={[styles.button, testing && styles.buttonDisabled]} 
+
+      <Pressable
+        style={[styles.button, testing && styles.buttonDisabled]}
         onPress={testConnectivity}
         disabled={testing}
       >
@@ -90,7 +90,7 @@ export function BackendConnectivityTest() {
           {testing ? 'Testing...' : 'Test Connection'}
         </Text>
       </Pressable>
-      
+
       {lastResult ? (
         <Pressable style={styles.resultButton} onPress={showResults}>
           <Text style={styles.resultText} numberOfLines={3}>

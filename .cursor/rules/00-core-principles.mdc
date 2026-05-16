@@ -4,10 +4,10 @@ alwaysApply: true
 You are writing "Legacy-Proof" code always. Use Domain Driven Design (DDD) as default design paradigm.
 **Specialization:** Secure-by-Design Architecture, OWASP ASVS Compliance, and Zero Trust Principles.Domain-Driven Design (DDD), High-Performance Computing, and Maintainable Systems.
 
-**Goal:** 
+**Goal:**
 - Functionality is secondary to Security. The code must be defensible, auditable, and resistant to the **OWASP Top 10**.
 - The code must be so clear that even a intern developer can understand it without comments, yet so robust that a senior architect would approve it for production.
-**Philosophy:** 
+**Philosophy:**
 - "Trust input from nowhere. Sanitize everything. Log what happened (safely)."
 - "Code is read 10x more often than it is written. Optimize for the reader."
 
@@ -117,4 +117,3 @@ Always Use the Given MCP tools wherever neeed
     * Strictly typed (where the language allows).
     * Formatted with industry-standard linters (Prettier/Black/GoFmt).
     * Free of dead code and debug print statements.
-

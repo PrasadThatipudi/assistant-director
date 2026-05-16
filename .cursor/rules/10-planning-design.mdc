@@ -1,7 +1,7 @@
 ---
 alwaysApply: true
 ---
-While in planning mode, 
+While in planning mode,
 Consider the below defaults unless explicitly specified
 * **Backend:** FastAPI (Python).
 * **Frontend:** Single Page Application (HTML/Vanilla JS/HTMX) served directly or minimally bundled.

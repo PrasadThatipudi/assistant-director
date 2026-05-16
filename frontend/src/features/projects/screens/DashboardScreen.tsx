@@ -47,7 +47,7 @@ export function DashboardScreen({ navigation }: Props) {
           <Text style={styles.offlineText}>📱 Offline mode - changes will sync when connected</Text>
         </View>
       )}
-      
+
       <View style={styles.toolbar}>
         <Text style={styles.toolbarLabel}>Show archived</Text>
         <Switch

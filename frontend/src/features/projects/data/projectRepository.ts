@@ -128,10 +128,10 @@ export class ProjectRepository {
     return this.runSerialized(async () => {
       const db = this.getDb();
       console.log('[ProjectRepo] Database connection obtained');
-      
+
       const ownerId = requireOwnerId(db);
       console.log('[ProjectRepo] Owner ID verified');
-      
+
       const now = new Date().toISOString();
       const id = createId();
       const project: Project = {
@@ -144,9 +144,9 @@ export class ProjectRepository {
         isArchived: false,
         archivedAt: null,
       };
-      
+
       console.log('[ProjectRepo] Project object created:', { id: id.substring(0, 8) + '...', ownerId: ownerId.substring(0, 8) + '...' });
-      
+
       try {
         db.runSync(
           `INSERT INTO projects (id, owner_id, title, description, is_archived, archived_at, created_at, updated_at, server_version, pending_sync, deleted)
@@ -163,7 +163,7 @@ export class ProjectRepository {
         console.error('[ProjectRepo] Database INSERT failed:', dbError);
         throw new Error(`Database operation failed: ${dbError instanceof Error ? dbError.message : String(dbError)}`);
       }
-      
+
       try {
         enqueueProjectUpsert(db, project.id, buildSyncPayload(project), project.updatedAt);
         console.log('[ProjectRepo] Sync enqueue successful');
@@ -171,7 +171,7 @@ export class ProjectRepository {
         console.error('[ProjectRepo] Sync enqueue failed:', syncError);
         // Don't throw here as the project was created successfully
       }
-      
+
       this.scheduleSync(db);
       console.log('[ProjectRepo] Project creation completed successfully');
       return project;

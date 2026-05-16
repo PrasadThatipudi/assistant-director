@@ -6,8 +6,6 @@ import uuid
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
-import pytest
-
 if TYPE_CHECKING:
     from fastapi.testclient import TestClient
 

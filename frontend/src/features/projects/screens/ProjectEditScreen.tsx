@@ -32,25 +32,25 @@ export function ProjectEditScreen({ navigation, route }: Props) {
   }, [project]);
 
   const persist = useCallback(async () => {
-    console.log('[ProjectEdit] Starting persist operation', { 
-      isCreate, 
-      projectId, 
+    console.log('[ProjectEdit] Starting persist operation', {
+      isCreate,
+      projectId,
       title: title.substring(0, 50),
       bootstrapState,
       canPerformOperations
     });
     setFormError(null);
-    
+
     // Check if bootstrap is complete before allowing operations
     if (!canPerformOperations) {
-      const message = bootstrapState === 'loading' || bootstrapState === 'retrying' 
+      const message = bootstrapState === 'loading' || bootstrapState === 'retrying'
         ? 'App is still initializing. Please wait a moment and try again.'
         : 'App initialization failed. Please retry or restart the app.';
       console.log('[ProjectEdit] Bootstrap not ready:', { bootstrapState, message });
       setFormError(message);
       return;
     }
-    
+
     const result = validateProjectDraft({ title, description });
     if (!result.ok) {
       console.log('[ProjectEdit] Validation failed:', result.message);
@@ -58,7 +58,7 @@ export function ProjectEditScreen({ navigation, route }: Props) {
       return;
     }
     console.log('[ProjectEdit] Validation passed');
-    
+
     setSaving(true);
     try {
       if (isCreate) {
@@ -89,7 +89,7 @@ export function ProjectEditScreen({ navigation, route }: Props) {
         message: errorMessage,
         stack: error instanceof Error ? error.stack : undefined
       });
-      
+
       // Display user-friendly error messages based on error type
       if (errorMessage.includes('App bootstrap incomplete')) {
         setFormError('App is still initializing. Please wait a moment and try again.');
@@ -159,7 +159,7 @@ export function ProjectEditScreen({ navigation, route }: Props) {
   return (
     <Screen>
       {formError ? <Text style={styles.banner}>{formError}</Text> : null}
-      
+
       {/* Bootstrap status indicator */}
       {bootstrapState !== 'success' && (
         <View style={[
@@ -174,7 +174,7 @@ export function ProjectEditScreen({ navigation, route }: Props) {
           </Text>
         </View>
       )}
-      
+
       <LabeledField label="Title" value={title} onChangeText={setTitle} autoFocus={isCreate} />
       <LabeledField
         label="Description"

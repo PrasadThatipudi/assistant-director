@@ -11,12 +11,12 @@ export function getStoredUserId(db: SQLiteDatabase): string | null {
 
 async function attemptUserRegistration(base: string, retryCount: number): Promise<string> {
   const email = `device-${Date.now()}@local.invalid`;
-  console.log('[Auth] Attempting user registration:', { 
-    email, 
+  console.log('[Auth] Attempting user registration:', {
+    email,
     endpoint: `${base}/v1/users`,
-    retryCount 
+    retryCount
   });
-  
+
   let res: Response;
   try {
     res = await fetch(`${base}/v1/users`, {
@@ -30,13 +30,13 @@ async function attemptUserRegistration(base: string, retryCount: number): Promis
     console.warn('[Auth] Registration network error:', detail);
     throw new Error(`USER_REGISTER_NETWORK: ${detail}`);
   }
-  
+
   if (!res.ok) {
     const errorText = await res.text();
     console.log('[Auth] Registration failed with status:', res.status, errorText);
     throw new Error(`USER_REGISTER_HTTP: ${res.status} ${errorText}`);
   }
-  
+
   const body = (await res.json()) as { id: string };
   console.log('[Auth] Registration successful, user ID:', body.id.substring(0, 8) + '...');
   return body.id;
@@ -46,7 +46,7 @@ export async function ensureApiUser(db: SQLiteDatabase, maxRetries = 3): Promise
   console.log('[Auth] Starting ensureApiUser...', { maxRetries });
   const existing = getStoredUserId(db);
   const base = getApiBaseUrl();
-  
+
   console.log('[Auth] Current state:', {
     hasExistingUser: !!existing,
     existingUserId: existing?.substring(0, 8) + '...',
@@ -75,12 +75,12 @@ export async function ensureApiUser(db: SQLiteDatabase, maxRetries = 3): Promise
       return userId;
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
-      console.log('[Auth] Registration attempt failed:', { 
-        attempt: attempt + 1, 
-        maxRetries, 
-        error: lastError.message 
+      console.log('[Auth] Registration attempt failed:', {
+        attempt: attempt + 1,
+        maxRetries,
+        error: lastError.message
       });
-      
+
       // If this was the last attempt, don't wait
       if (attempt < maxRetries - 1) {
         // Progressive backoff: 1s, 2s, 4s, etc.
@@ -90,7 +90,7 @@ export async function ensureApiUser(db: SQLiteDatabase, maxRetries = 3): Promise
       }
     }
   }
-  
+
   // All retries failed — use offline mode for HTTP or network (retries already exhausted).
   console.warn('[Auth] All registration attempts failed, last error:', lastError?.message);
 

@@ -42,28 +42,28 @@ export default function App() {
 
       const db = openAssistantDatabase();
       console.log('[App] Database opened');
-      
+
       runMigrations(db);
       console.log('[App] Migrations completed');
-      
+
       // Use 3 retries for automatic attempts, 1 for manual retries
       const maxRetries = manualRetry ? 1 : 3;
       const userId = await ensureApiUser(db, maxRetries);
       console.log('[App] User ensured:', userId?.substring(0, 8) + '...');
-      
+
       await migrateLegacyFromAsyncStorage(db, userId);
       console.log('[App] Legacy migration completed');
-      
+
       await flushOutbox(db);
       console.log('[App] Outbox flushed');
-      
+
       console.log('[App] Bootstrap completed successfully');
-      
+
       // Determine final state based on user ID
       const isOfflineMode = userId === '00000000-0000-4000-8000-000000000001';
       setBootstrapState(isOfflineMode ? 'offline' : 'success');
       setReady(true);
-      
+
     } catch (error) {
       console.warn('[App] Bootstrap failed:', error);
       const errorMsg = error instanceof Error ? error.message : String(error);
@@ -114,18 +114,18 @@ export default function App() {
           {bootstrapState === 'retrying' && 'Retrying connection...'}
           {bootstrapState === 'failed' && 'Connection failed'}
         </Text>
-        
+
         {bootstrapState === 'failed' && (
           <View style={styles.errorContainer}>
             <Text style={styles.errorText}>{errorMessage}</Text>
-            <Pressable 
-              style={styles.retryButton} 
+            <Pressable
+              style={styles.retryButton}
               onPress={() => runBootstrap(true)}
             >
               <Text style={styles.retryButtonText}>Retry</Text>
             </Pressable>
-            <Pressable 
-              style={styles.offlineButton} 
+            <Pressable
+              style={styles.offlineButton}
               onPress={() => {
                 setBootstrapState('offline');
                 setReady(true);

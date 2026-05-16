@@ -26,7 +26,7 @@ When asked to sanitize or tidyup the code base, Your goal is to maximize code re
 * Identify dangling code files which are disconnected from the project or doesn't contribute to the overall functionality and mark them for removal. Ask the users permission to delete it with your reasoning for deletion.
 * Remove intermediate test scripts that are developed to test functionality of a specific function which are not part of unit or integration test suite.
 * Remove all redundant markdown that doesn't contribute to the user experience or developer experience.
-* Use a minimalist approach (without affecting functionality and readability) and keep optimal number of lines of code 
+* Use a minimalist approach (without affecting functionality and readability) and keep optimal number of lines of code
 
 #### Enforce DRY (Don't Repeat Yourself):
 - Identify repeated logic blocks (3+ lines). Extract them into private helper functions with descriptive verbs as names.
@@ -52,7 +52,7 @@ When asked to sanitize or tidyup the code base, Your goal is to maximize code re
 
 - **Function Length:** Target functions under 40 lines. If longer, suggest splitting into sub-routines.
 
-- **Variable Naming:** Variables must be descriptive nouns (e.g., userList, isAuthorized). 
+- **Variable Naming:** Variables must be descriptive nouns (e.g., userList, isAuthorized).
 
 - Execute the 'Safe' changes first. Remove all zombie comments and unused imports. Apply guard clauses.
 

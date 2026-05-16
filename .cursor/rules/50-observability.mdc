@@ -1,6 +1,6 @@
 ---
 description: LOGGING: Structured logging standards, levels, and PII redaction.
-globs: 
+globs:
 triggers:
   - logging
   - logger

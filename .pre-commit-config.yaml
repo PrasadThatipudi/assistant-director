@@ -1,0 +1,45 @@
+# Install: pip install pre-commit && pre-commit install
+# Run all hooks manually: pre-commit run --all-files
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-merge-conflict
+      - id: detect-private-key
+      - id: check-added-large-files
+        args: [--maxkb=512]
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.9.3
+    hooks:
+      - id: ruff
+        name: ruff (backend)
+        args: [--fix]
+        files: ^backend/(src|tests)/
+
+  - repo: local
+    hooks:
+      - id: frontend-typecheck
+        name: TypeScript typecheck (frontend)
+        entry: npm run typecheck:frontend
+        language: system
+        pass_filenames: false
+        files: ^(frontend/|packages/sp-screenplay/).*\.(ts|tsx)$
+
+      - id: frontend-unit-tests
+        name: Vitest (frontend)
+        entry: npm run test:frontend
+        language: system
+        pass_filenames: false
+        files: ^frontend/.*\.(ts|tsx)$
+
+      - id: sp-screenplay-tests
+        name: Vitest (sp-screenplay)
+        entry: npm run test:sp-screenplay
+        language: system
+        pass_filenames: false
+        files: ^packages/sp-screenplay/.*\.ts$
