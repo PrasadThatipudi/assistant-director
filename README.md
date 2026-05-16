@@ -217,7 +217,7 @@ Workflow: [`.github/workflows/ci.yml`](.github/workflows/ci.yml) (**CI and Deplo
 
 **On push to `main` only** (after the jobs above succeed):
 
-3. **Deploy backend (Render)** – POST to `RENDER_DEPLOY_HOOK_URL` to redeploy the Docker web service defined in [`render.yaml`](render.yaml) (Postgres + `alembic upgrade head` on each release).
+3. **Deploy backend (Render)** – POST to `RENDER_DEPLOY_HOOK_URL` to redeploy the Docker web service defined in [`render.yaml`](render.yaml) (Postgres + migrations via `dockerCommand` on each deploy).
 4. **Deploy backend (GHCR)** – also builds and pushes `ghcr.io/<lowercase-github-owner>/assistant-director-api` (optional mirror for self-hosted Docker).
 5. **Deploy frontend (EAS)** – runs `eas build --platform android --profile production` from [`frontend/`](frontend/) (Play Store–style **AAB**; see [`frontend/eas.json`](frontend/eas.json)). Track progress on [expo.dev](https://expo.dev).
 
@@ -317,7 +317,7 @@ Make the package **public** or authenticate `docker login ghcr.io` on the server
   - `DATABASE_URL` – Postgres DSN (same shape as [`backend/src/assistant_director_api/config.py`](backend/src/assistant_director_api/config.py)).
   - `CORS_ALLOW_ORIGINS` – comma-separated allow list; include your **Netlify** site URL and any Expo dev origins you use.
 
-**Migrations:** after the database is up, run `alembic upgrade head` once per deploy (release command, init container, or manual `docker compose run`). Do not rely on CI alone to migrate production.
+**Migrations:** on Render, [`render.yaml`](render.yaml) runs `alembic upgrade head` in `dockerCommand` before uvicorn starts (free tier). For self-hosted Docker, run `alembic upgrade head` once per deploy manually or via compose.
 
 ### Example production compose
 
