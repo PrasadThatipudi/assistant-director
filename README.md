@@ -217,8 +217,9 @@ Workflow: [`.github/workflows/ci.yml`](.github/workflows/ci.yml) (**CI and Deplo
 
 **On push to `main` only** (after the jobs above succeed):
 
-3. **Deploy backend (GHCR)** – builds and pushes `ghcr.io/<lowercase-github-owner>/assistant-director-api` with tags **`main`** and the commit **SHA**.
-4. **Deploy frontend (EAS)** – runs `eas build --platform android --profile production` from [`frontend/`](frontend/) (Play Store–style **AAB**; see [`frontend/eas.json`](frontend/eas.json)). Track progress on [expo.dev](https://expo.dev).
+3. **Deploy backend (Render)** – POST to `RENDER_DEPLOY_HOOK_URL` to redeploy the Docker web service defined in [`render.yaml`](render.yaml) (Postgres + `alembic upgrade head` on each release).
+4. **Deploy backend (GHCR)** – also builds and pushes `ghcr.io/<lowercase-github-owner>/assistant-director-api` (optional mirror for self-hosted Docker).
+5. **Deploy frontend (EAS)** – runs `eas build --platform android --profile production` from [`frontend/`](frontend/) (Play Store–style **AAB**; see [`frontend/eas.json`](frontend/eas.json)). Track progress on [expo.dev](https://expo.dev).
 
 You can also trigger a deploy manually: **Actions → CI and Deploy → Run workflow** (branch must be `main`).
 
@@ -255,22 +256,49 @@ pre-commit run --all-files
 
 Backend **pytest** (Postgres integration tests) is not in pre-commit because it needs a database; CI still runs it on every PR.
 
+#### Deploy API to Render (production host)
+
+The live API runs on [Render](https://render.com) (managed Postgres + Docker web service), not on GitHub or Netlify.
+
+**One-time setup:**
+
+1. Sign in at [render.com](https://render.com) and connect this GitHub repository.
+2. **New → Blueprint** → select the repo; Render reads [`render.yaml`](render.yaml) and creates `assistant-director-db` + `assistant-director-api`.
+3. Wait for the first deploy to finish. Open the web service and note the public URL (e.g. `https://assistant-director-api.onrender.com`).
+4. In Render → web service → **Environment**, set **`CORS_ALLOW_ORIGINS`** (comma-separated): your Render URL, `http://localhost:8081`, and any Netlify site URL you use.
+5. Web service → **Settings → Deploy Hook** → copy the URL → GitHub secret **`RENDER_DEPLOY_HOOK_URL`**.
+6. GitHub secret **`EXPO_PUBLIC_API_BASE_URL`** = your Render service URL (no trailing slash), e.g. `https://assistant-director-api.onrender.com`.
+
+**Verify:**
+
+```bash
+curl -sS https://assistant-director-api.onrender.com/health
+# {"status":"ok"}
+```
+
+**Free tier:** the service may spin down when idle; the first request after idle can take 30–60 seconds.
+
+Subsequent pushes to **`main`** run backend tests, then the workflow calls the deploy hook so Render rebuilds only after CI passes.
+
 #### GitHub repository secrets
 
 Configure under **Settings → Secrets and variables → Actions**:
 
 | Secret | Required for | Notes |
 | :--- | :--- | :--- |
+| `RENDER_DEPLOY_HOOK_URL` | Render redeploy on `main` | From Render → service → Deploy Hook (after Blueprint first deploy) |
 | `EXPO_TOKEN` | EAS production build | Create at [expo.dev](https://expo.dev) → Account → Access tokens |
-| `EXPO_PUBLIC_API_BASE_URL` | Production mobile bundle | **HTTPS** URL of your deployed API (no trailing slash). Baked in at EAS build time via [`frontend/app.config.js`](frontend/app.config.js) |
+| `EXPO_PUBLIC_API_BASE_URL` | Production mobile bundle | Your **Render** HTTPS base URL (no trailing slash). Baked in at EAS build time via [`frontend/app.config.js`](frontend/app.config.js) |
 
 `GITHUB_TOKEN` is provided automatically for GHCR push.
 
+If `RENDER_DEPLOY_HOOK_URL` is not set yet, the Render deploy job logs a skip message and exits successfully until you add the secret.
+
 For a sideload **APK** (e.g. sharing with friends), use the `preview` profile locally or in CI instead of `production`; add `"android": { "buildType": "apk" }` under that profile in [`frontend/eas.json`](frontend/eas.json).
 
-#### Run the API image from GHCR
+#### Run the API image from GHCR (self-hosted alternative)
 
-GitHub hosts the **container image**, not the running API. On your server:
+For production, prefer **Render** (above). GHCR only stores the image; it does not run the API. On your own server:
 
 ```bash
 # Example: pull and run with docker-compose.prod.yml

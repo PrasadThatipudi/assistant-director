@@ -130,6 +130,23 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+  deploy-render-api:
+    name: Deploy backend (Render)
+    runs-on: ubuntu-latest
+    needs: [backend]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - name: Trigger Render deploy
+        env:
+          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: |
+          if [ -z "$RENDER_DEPLOY_HOOK_URL" ]; then
+            echo "RENDER_DEPLOY_HOOK_URL is not set. Skip Render deploy."
+            echo "Create the service from render.yaml in the Render dashboard, then add the Deploy Hook URL as a GitHub secret."
+            exit 0
+          fi
+          curl -fsS -X POST "$RENDER_DEPLOY_HOOK_URL"
+
   deploy-frontend-eas:
     name: Deploy frontend (EAS production)
     runs-on: ubuntu-latest
