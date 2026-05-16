@@ -296,7 +296,19 @@ Configure under **Settings → Secrets and variables → Actions**:
 
 If `RENDER_DEPLOY_HOOK_URL` is not set yet, the Render deploy job logs a skip message and exits successfully until you add the secret.
 
-For a sideload **APK** (e.g. sharing with friends), use the `preview` profile locally or in CI instead of `production`; add `"android": { "buildType": "apk" }` under that profile in [`frontend/eas.json`](frontend/eas.json).
+#### Android builds: APK vs AAB ([`frontend/eas.json`](frontend/eas.json))
+
+| Profile | Output | Use |
+| :--- | :--- | :--- |
+| **`production`** | **AAB** | Google Play (`eas submit --platform android --profile production`). CI uses this on `main`. |
+| **`preview`** | **APK** | Sideload or share with friends (install directly on device). |
+
+**Download an APK from Expo:**
+
+1. [expo.dev](https://expo.dev) → project → **Builds** → **Create build** → Android → profile **`preview`** (not `production`).
+2. Or from `frontend/`: `EXPO_PUBLIC_API_BASE_URL=https://your-api.example.com eas build --platform android --profile preview`
+
+Existing **production** builds on Expo remain **AAB**; start a new **preview** build to get an APK.
 
 #### Run the API image from GHCR (self-hosted alternative)
 
