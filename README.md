@@ -206,15 +206,50 @@ flowchart LR
 
 ## CI/CD and deployment
 
-### Continuous integration (GitHub Actions)
+### Continuous integration and deploy (GitHub Actions)
 
-On every **pull request** and **push** to `main`, [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs:
+Workflow: [`.github/workflows/ci.yml`](.github/workflows/ci.yml) (**CI and Deploy**).
 
-1. **Frontend** – `npm ci` at the repo root, then `npm run typecheck:frontend`, `npm run test:frontend`, and `npm run test:sp-screenplay` (Vitest for the [`packages/sp-screenplay`](packages/sp-screenplay/) workspace).
-2. **Backend** – Python 3.11, `pip install -e ".[dev]"` from [`backend/`](backend/), **Ruff**, **pytest** (API integration tests use a **Postgres 16** service container; start local `docker compose` to run the same tests offline), **pytest** for [`packages/sp-screenplay-py`](packages/sp-screenplay-py/), and a smoke import of the FastAPI app.
-3. **Docker** – builds the API image with **repository root** as context: `docker build -f backend/Dockerfile .` (see [`backend/Dockerfile`](backend/Dockerfile)). On **push to `main`** only, the workflow logs in to **GHCR** and pushes tags `sha` and `main` for `ghcr.io/<lowercase-owner>/assistant-director-api`.
+**On every pull request and push to `main`:**
 
-Enable **branch protection** on `main` and require these checks to pass before merge.
+1. **Frontend** – `npm ci` at the repo root, then `npm run typecheck:frontend`, `npm run test:frontend`, and `npm run test:sp-screenplay` (Vitest for [`packages/sp-screenplay`](packages/sp-screenplay/)).
+2. **Backend** – Python 3.11, `pip install -e ".[dev]"` from [`backend/`](backend/), **Ruff**, **pytest** (Postgres 16 service container), **pytest** for [`packages/sp-screenplay-py`](packages/sp-screenplay-py/), and a smoke import of the FastAPI app.
+
+**On push to `main` only** (after the jobs above succeed):
+
+3. **Deploy backend (GHCR)** – builds and pushes `ghcr.io/<lowercase-github-owner>/assistant-director-api` with tags **`main`** and the commit **SHA**.
+4. **Deploy frontend (EAS)** – runs `eas build --platform android --profile production` from [`frontend/`](frontend/) (Play Store–style **AAB**; see [`frontend/eas.json`](frontend/eas.json)). Track progress on [expo.dev](https://expo.dev).
+
+You can also trigger a deploy manually: **Actions → CI and Deploy → Run workflow** (branch must be `main`).
+
+Enable **branch protection** on `main` and require the test jobs to pass before merge.
+
+#### GitHub repository secrets
+
+Configure under **Settings → Secrets and variables → Actions**:
+
+| Secret | Required for | Notes |
+| :--- | :--- | :--- |
+| `EXPO_TOKEN` | EAS production build | Create at [expo.dev](https://expo.dev) → Account → Access tokens |
+| `EXPO_PUBLIC_API_BASE_URL` | Production mobile bundle | **HTTPS** URL of your deployed API (no trailing slash). Baked in at EAS build time via [`frontend/app.config.js`](frontend/app.config.js) |
+
+`GITHUB_TOKEN` is provided automatically for GHCR push.
+
+For a sideload **APK** (e.g. sharing with friends), use the `preview` profile locally or in CI instead of `production`; add `"android": { "buildType": "apk" }` under that profile in [`frontend/eas.json`](frontend/eas.json).
+
+#### Run the API image from GHCR
+
+GitHub hosts the **container image**, not the running API. On your server:
+
+```bash
+# Example: pull and run with docker-compose.prod.yml
+export API_IMAGE=ghcr.io/<your-github-owner-lowercase>/assistant-director-api:main
+# Set DATABASE_URL, POSTGRES_PASSWORD, CORS_ALLOW_ORIGINS in .env.prod
+docker compose -f docker-compose.prod.yml --env-file .env.prod up -d
+docker compose -f docker-compose.prod.yml run --rm api alembic upgrade head
+```
+
+Make the package **public** or authenticate `docker login ghcr.io` on the server if the image is private.
 
 ### API container (Docker)
 

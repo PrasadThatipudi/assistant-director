@@ -31,6 +31,12 @@
     "plugins": [
       "expo-sqlite",
       "expo-dev-client"
-    ]
+    ],
+    "extra": {
+      "publicApiBaseUrl": "http://10.0.2.2:8000",
+      "eas": {
+        "projectId": "c9ee0fa9-7ca9-40d2-9f89-30329e5de542"
+      }
+    }
   }
 }
