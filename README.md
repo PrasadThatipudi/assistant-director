@@ -278,6 +278,8 @@ curl -sS https://assistant-director-api.onrender.com/health
 
 **Free tier:** the service may spin down when idle; the first request after idle can take 30–60 seconds.
 
+Render’s `DATABASE_URL` uses `postgresql://`; the API normalizes it to `postgresql+psycopg://` in [`backend/src/assistant_director_api/config.py`](backend/src/assistant_director_api/config.py) so Alembic and SQLAlchemy use psycopg3 (no manual env edit on Render).
+
 Subsequent pushes to **`main`** run backend tests, then the workflow calls the deploy hook so Render rebuilds only after CI passes.
 
 #### GitHub repository secrets
