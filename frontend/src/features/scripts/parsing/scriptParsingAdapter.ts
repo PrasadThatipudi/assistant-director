@@ -5,7 +5,7 @@ export type {
 } from '@assistant-director/sp-screenplay';
 
 export {
-  isSpScreenplayFileName,
+  isScreenplayTemplateFileName,
   parseSpDocument,
   parseResultOk,
 } from '@assistant-director/sp-screenplay';

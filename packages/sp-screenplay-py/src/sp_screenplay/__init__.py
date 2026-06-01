@@ -18,7 +18,7 @@ from sp_screenplay.parse import (
 )
 from sp_screenplay.validate import validate_sp_bytes
 
-SP_SCREENPLAY_MEDIA_TYPE = "text/x-sp; charset=utf-8"
+SP_SCREENPLAY_MEDIA_TYPE = "text/plain; charset=utf-8"
 
 __all__ = [
     "SP_SCREENPLAY_MEDIA_TYPE",

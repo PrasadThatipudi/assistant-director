@@ -22,7 +22,7 @@ export function formatScriptValidationError(rawMessage: string): { title: string
           (item) =>
             `Line ${item.line ?? '?'}: ${parseErrorCodeToUserMessage(String(item.code ?? ''))}`,
         );
-      const body = ['This .sp file could not be parsed.', ...lines].join('\n');
+      const body = ['This screenplay could not be parsed.', ...lines].join('\n');
       return { title: 'Invalid screenplay', message: body };
     }
   } catch {

@@ -55,7 +55,8 @@ export function ScriptReaderScreen({ route }: Props) {
     return (
       <Screen>
         <Text style={styles.muted}>
-          No script for this project. Attach a .sp file from the project detail screen.
+          No script for this project. Add one from the project screen: choose a .txt file, paste from the
+          clipboard, or on web drag and drop a .txt file.
         </Text>
       </Screen>
     );

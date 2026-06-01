@@ -2,7 +2,7 @@ import * as Crypto from 'expo-crypto';
 import * as FileSystem from 'expo-file-system/legacy';
 
 import { openAssistantDatabase } from '../../data/db/openDatabase';
-import { formatScriptValidationError, validateSpTextOrThrowJsonDetail } from './scriptImportCore';
+import { validateSpTextOrThrowJsonDetail } from './scriptImportCore';
 import { CACHED_SCRIPT_NON_TEXT_PLACEHOLDER } from './scriptUiCopy';
 
 const MAX_OCTET_STREAM_TEXT_BYTES = 2 * 1024 * 1024;
@@ -50,30 +50,17 @@ function utf8ByteLength(text: string): number {
   return new TextEncoder().encode(text).length;
 }
 
-export async function importScriptForProjectLocally(
+export type ScriptTextImportMeta = {
+  sourceFilename: string | null;
+  mimeType: string;
+};
+
+export async function importScriptTextForProjectLocally(
   projectId: string,
-  localUri: string,
-  fileName: string,
-  mimeType: string,
+  text: string,
+  meta: ScriptTextImportMeta,
   onPhase?: (phase: ScriptImportPhase) => void,
 ): Promise<LocalScriptAttachment> {
-  const db = openAssistantDatabase();
-  const readUri = await resolveReadableFileUri(localUri);
-  const info = await FileSystem.getInfoAsync(readUri);
-  if (!info.exists || typeof info.size !== 'number') {
-    throw new Error('SCRIPT_IMPORT_READ: file not found');
-  }
-  if (info.size > MAX_SCRIPT_BYTES) {
-    throw new Error('SCRIPT_IMPORT_TOO_LARGE: file exceeds 20MB limit');
-  }
-
-  let text: string;
-  try {
-    text = await FileSystem.readAsStringAsync(readUri, { encoding: FileSystem.EncodingType.UTF8 });
-  } catch (e) {
-    wrapScriptImportError('SCRIPT_IMPORT_READ', e);
-  }
-
   if (utf8ByteLength(text) > MAX_SCRIPT_BYTES) {
     throw new Error('SCRIPT_IMPORT_TOO_LARGE: file exceeds 20MB limit');
   }
@@ -82,11 +69,12 @@ export async function importScriptForProjectLocally(
   validateSpTextOrThrowJsonDetail(text);
 
   onPhase?.('saving');
+  const db = openAssistantDatabase();
   const localAssetId = Crypto.randomUUID();
   const root = FileSystem.documentDirectory ?? '';
   const dir = `${root}scripts`;
   await FileSystem.makeDirectoryAsync(dir, { intermediates: true }).catch(() => undefined);
-  const dest = `${dir}/${localAssetId}.sp`;
+  const dest = `${dir}/${localAssetId}.txt`;
   try {
     await FileSystem.writeAsStringAsync(dest, text, { encoding: FileSystem.EncodingType.UTF8 });
   } catch (e) {
@@ -105,6 +93,8 @@ export async function importScriptForProjectLocally(
   );
   const nextVersion = (prior?.version ?? 0) + 1;
 
+  const sourceFilename = meta.sourceFilename?.trim() ? meta.sourceFilename.trim() : null;
+
   db.runSync(
     `INSERT OR REPLACE INTO script_cache (project_id, local_asset_id, version, content_sha256, mime_type, local_uri, byte_size, updated_at, source_filename)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -112,19 +102,53 @@ export async function importScriptForProjectLocally(
     localAssetId,
     nextVersion,
     contentSha256,
-    mimeType,
+    meta.mimeType,
     dest,
     byteSize,
     now,
-    fileName.trim() ? fileName : null,
+    sourceFilename,
   );
 
   return {
     projectId,
     localAssetId,
     version: nextVersion,
-    sourceFilename: fileName.trim() ? fileName : null,
+    sourceFilename,
   };
+}
+
+export async function importScriptForProjectLocally(
+  projectId: string,
+  localUri: string,
+  fileName: string,
+  mimeType: string,
+  onPhase?: (phase: ScriptImportPhase) => void,
+): Promise<LocalScriptAttachment> {
+  const readUri = await resolveReadableFileUri(localUri);
+  const info = await FileSystem.getInfoAsync(readUri);
+  if (!info.exists || typeof info.size !== 'number') {
+    throw new Error('SCRIPT_IMPORT_READ: file not found');
+  }
+  if (info.size > MAX_SCRIPT_BYTES) {
+    throw new Error('SCRIPT_IMPORT_TOO_LARGE: file exceeds 20MB limit');
+  }
+
+  let text: string;
+  try {
+    text = await FileSystem.readAsStringAsync(readUri, { encoding: FileSystem.EncodingType.UTF8 });
+  } catch (e) {
+    wrapScriptImportError('SCRIPT_IMPORT_READ', e);
+  }
+
+  return importScriptTextForProjectLocally(
+    projectId,
+    text,
+    {
+      sourceFilename: fileName.trim() ? fileName : null,
+      mimeType,
+    },
+    onPhase,
+  );
 }
 
 export function getScriptCacheRow(projectId: string): {

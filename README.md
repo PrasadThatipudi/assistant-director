@@ -1,6 +1,6 @@
 # Assistant Director
 
-Assistant Director is a monorepo for an independent filmmaker companion app: it centralizes production planning on mobile while keeping a proper server database for durability, and it supports **offline-first** project data plus **screenplays that stay on-device only** — the API never stores screenplay bytes; the app validates and parses `.sp` files locally and caches them in sandbox storage for structured reading offline.
+Assistant Director is a monorepo for an independent filmmaker companion app: it centralizes production planning on mobile while keeping a proper server database for durability, and it supports **offline-first** project data plus **screenplays that stay on-device only** — the API never stores screenplay bytes; the app validates and parses plain-text **`.txt` screenplays** (the Assistant Director template format) locally and caches them in sandbox storage for structured reading offline.
 
 ## Context and stack
 
@@ -155,7 +155,7 @@ flowchart LR
 ```
 
 - **Projects** live in SQLite on device for fast lists and offline edits. Changes are appended to an **outbox** and pushed to `POST /v1/sync/push` when the network is available (last-write-wins using `updated_at`).
-- **Screenplays (`.sp`)** are **attached on device only**: the file is validated and parsed in the app (via [`packages/sp-screenplay`](packages/sp-screenplay/), imported through a small adapter in [`frontend/src/features/scripts/parsing/`](frontend/src/features/scripts/parsing/)). The server **never** receives screenplay content. **Another device** logged into the same account will **not** get a copy of the script automatically; only project/scene metadata syncs today.
+- **Screenplays (UTF-8 `.txt` using the template)** are **attached on device only**: text is validated and parsed in the app (via [`packages/sp-screenplay`](packages/sp-screenplay/), imported through a small adapter in [`frontend/src/features/scripts/parsing/`](frontend/src/features/scripts/parsing/)). Users can **choose a file, paste from the clipboard, or (on web) drag and drop** a `.txt` file. The server **never** receives screenplay content. **Another device** logged into the same account will **not** get a copy of the script automatically; only project/scene metadata syncs today.
 
 ## Repository layout
 
@@ -163,8 +163,8 @@ flowchart LR
 | :--- | :--- |
 | [`frontend/`](frontend/) | Expo application |
 | [`backend/`](backend/) | FastAPI service and Alembic migrations |
-| [`packages/sp-screenplay-py/`](packages/sp-screenplay-py/) | Reference Python `.sp` grammar and tests (CI); not used by the API at runtime |
-| [`packages/sp-screenplay/`](packages/sp-screenplay/) | Reusable TypeScript `.sp` parser (npm workspace) |
+| [`packages/sp-screenplay-py/`](packages/sp-screenplay-py/) | Reference Python grammar and tests for `.txt` template screenplays (CI); not used by the API at runtime |
+| [`packages/sp-screenplay/`](packages/sp-screenplay/) | Reusable TypeScript parser for the same template format (npm workspace) |
 | [`docker-compose.yml`](docker-compose.yml) | PostgreSQL for local development |
 
 ## Configuration

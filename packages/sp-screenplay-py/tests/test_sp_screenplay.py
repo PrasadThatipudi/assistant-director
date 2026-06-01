@@ -4,12 +4,12 @@ import pytest
 
 from sp_screenplay import SpScreenplayValidationError, parse_sp, validate_sp_bytes
 
-_FIXTURE = Path(__file__).resolve().parent / "fixtures" / "minimal.sp"
+_FIXTURE = Path(__file__).resolve().parent / "fixtures" / "minimal.txt"
 
 
 def test_validate_accepts_minimal_fixture() -> None:
     data = _FIXTURE.read_bytes()
-    validate_sp_bytes(filename="draft.sp", data=data)
+    validate_sp_bytes(filename="draft.txt", data=data)
 
 
 def test_parse_minimal_fixture_structure() -> None:
@@ -36,7 +36,7 @@ def test_validate_rejects_wrong_extension() -> None:
 
 def test_validate_rejects_invalid_utf8() -> None:
     with pytest.raises(SpScreenplayValidationError) as exc:
-        validate_sp_bytes(filename="x.sp", data=b"\xff\xfe\xfd")
+        validate_sp_bytes(filename="x.txt", data=b"\xff\xfe\xfd")
     assert exc.value.status_code == 400
 
 

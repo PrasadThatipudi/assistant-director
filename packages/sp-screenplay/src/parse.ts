@@ -292,7 +292,7 @@ export function parseSpDocument(text: string): SpParseResult {
   return { document: { header, scenes }, errors: [] };
 }
 
-export function isSpScreenplayFileName(fileName: string): boolean {
+export function isScreenplayTemplateFileName(fileName: string): boolean {
   const base = fileName.trim().split(/[/\\]/).pop() ?? '';
-  return base.toLowerCase().endsWith('.sp');
+  return base.toLowerCase().endsWith('.txt');
 }

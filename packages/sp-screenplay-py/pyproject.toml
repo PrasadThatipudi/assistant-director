@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "sp-screenplay"
 version = "0.1.0"
-description = "Parse and validate Assistant Director .sp screenplay files"
+description = "Parse and validate Assistant Director screenplay template (.txt) files"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = []

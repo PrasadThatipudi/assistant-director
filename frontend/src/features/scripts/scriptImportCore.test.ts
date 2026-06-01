@@ -17,7 +17,7 @@ describe('formatScriptValidationError', () => {
     expect(out?.message).toContain('Line 3:');
     expect(out?.message).not.toContain('unknown_body_line');
     expect(out?.message).toMatch(/not recognized|screenplay format/i);
-    expect(out?.message).toContain('This .sp file could not be parsed.');
+    expect(out?.message).toContain('This screenplay could not be parsed.');
   });
 
   it('formats string detail', () => {
@@ -40,7 +40,7 @@ ACTION
 Hello.
 `;
 
-  it('does not throw for valid .sp text', () => {
+  it('does not throw for valid template text', () => {
     expect(() => validateSpTextOrThrowJsonDetail(minimal)).not.toThrow();
   });
 

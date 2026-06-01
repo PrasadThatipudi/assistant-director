@@ -13,7 +13,7 @@ export {
   isCharacterCue,
   isDelimiterLine,
   isSceneHeading,
-  isSpScreenplayFileName,
+  isScreenplayTemplateFileName,
   parseMetaLine,
   parseSpDocument,
   sceneNumberFromHeading,

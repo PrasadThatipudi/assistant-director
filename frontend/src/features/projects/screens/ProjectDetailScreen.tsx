@@ -1,7 +1,17 @@
 import { useCallback, useLayoutEffect, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Alert,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import Constants from 'expo-constants';
+import * as Clipboard from 'expo-clipboard';
 import * as DocumentPicker from 'expo-document-picker';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../../shell/navigationTypes';
@@ -12,9 +22,12 @@ import {
   formatScriptValidationError,
   getScriptCacheRow,
   importScriptForProjectLocally,
-  isSpScreenplayFileName,
+  importScriptTextForProjectLocally,
+  isScreenplayTemplateFileName,
+  type LocalScriptAttachment,
   type ScriptImportPhase,
 } from '../../scripts';
+import { WebScriptDropZone } from '../../scripts/WebScriptDropZone';
 import { formatAttachedScriptSummary } from '../../scripts/scriptUiCopy';
 import { getApiBaseUrl } from '../../../shared/lib/env';
 import { projectRepository } from '../data/projectRepository';
@@ -27,6 +40,32 @@ function importPhaseLabel(phase: ScriptImportPhase): string {
     return 'Validating screenplay…';
   }
   return 'Saving on this device…';
+}
+
+const WRONG_EXTENSION_MESSAGE =
+  'Only .txt files in the Assistant Director screenplay template can be attached. Save your script as UTF-8 plain text with a .txt extension and try again.';
+
+const PASTED_SCREENPLAY_FILENAME = 'Pasted screenplay.txt';
+
+function handleScriptImportFailure(e: unknown): void {
+  const message = e instanceof Error ? e.message : 'Import failed';
+  const validationAlert = formatScriptValidationError(message);
+  if (validationAlert) {
+    Alert.alert(validationAlert.title, validationAlert.message);
+    return;
+  }
+  if (message.includes('SCRIPT_IMPORT_TOO_LARGE')) {
+    Alert.alert('File too large', 'Choose a screenplay under 20 MB.');
+    return;
+  }
+  if (message.startsWith('SCRIPT_IMPORT_')) {
+    Alert.alert(
+      'Could not save script',
+      'The file could not be read or written to secure storage on this device. Try picking the file again.',
+    );
+    return;
+  }
+  Alert.alert('Import failed', 'Something went wrong. Try again.');
 }
 
 function shouldShowExpoGoHttpBanner(): boolean {
@@ -113,69 +152,104 @@ export function ProjectDetailScreen({ navigation, route }: Props) {
     );
   };
 
-  const pickAndAttachScript = async () => {
+  const announceScriptAttached = (pickedName: string, version: number) => {
+    setScriptMeta(getScriptCacheRow(project.id));
+    const successMessage = `"${pickedName}" is saved on this device only (version ${version}). The server never receives your screenplay bytes.`;
+    const cachedAfterImport = getScriptCacheRow(project.id);
+    const alertButtons: { text: string; style?: 'cancel'; onPress?: () => void }[] = [
+      { text: 'OK', style: 'cancel' },
+    ];
+    if (cachedAfterImport) {
+      alertButtons.unshift({
+        text: 'Open script',
+        onPress: () => navigation.navigate('ScriptReader', { projectId: project.id }),
+      });
+    }
+    Alert.alert('Script attached', successMessage, alertButtons);
+  };
+
+  const runScriptImport = async (
+    importer: (onPhase: (phase: ScriptImportPhase) => void) => Promise<LocalScriptAttachment>,
+    displayName: string,
+  ) => {
+    setScriptImporting(true);
+    setScriptImportPhase('validating');
     try {
-      const picked = await DocumentPicker.getDocumentAsync({ copyToCacheDirectory: true });
-      if (picked.canceled || !picked.assets?.length) {
-        return;
-      }
-      const asset = picked.assets[0];
-      const pickedName = asset.name ?? 'script';
-      if (!isSpScreenplayFileName(pickedName)) {
-        Alert.alert(
-          'Wrong file type',
-          'Only .sp screenplay files can be attached. Save or export your script with the .sp extension and try again.',
-        );
-        return;
-      }
-
-      setScriptImporting(true);
-      setScriptImportPhase('validating');
-      const attachment = await importScriptForProjectLocally(
-        project.id,
-        asset.uri,
-        pickedName,
-        'text/x-sp',
-        (phase) => setScriptImportPhase(phase),
-      );
-      setScriptMeta(getScriptCacheRow(project.id));
-
-      const successMessage = `"${pickedName}" is saved on this device only (version ${attachment.version}). The server never receives your screenplay bytes.`;
-
-      const cachedAfterImport = getScriptCacheRow(project.id);
-      const alertButtons: { text: string; style?: 'cancel'; onPress?: () => void }[] = [
-        { text: 'OK', style: 'cancel' },
-      ];
-      if (cachedAfterImport) {
-        alertButtons.unshift({
-          text: 'Open script',
-          onPress: () => navigation.navigate('ScriptReader', { projectId: project.id }),
-        });
-      }
-      Alert.alert('Script attached', successMessage, alertButtons);
+      const attachment = await importer((phase) => setScriptImportPhase(phase));
+      announceScriptAttached(displayName, attachment.version);
     } catch (e) {
-      const message = e instanceof Error ? e.message : 'Import failed';
-      const validationAlert = formatScriptValidationError(message);
-      if (validationAlert) {
-        Alert.alert(validationAlert.title, validationAlert.message);
-        return;
-      }
-      if (message.includes('SCRIPT_IMPORT_TOO_LARGE')) {
-        Alert.alert('File too large', 'Choose a screenplay under 20 MB.');
-        return;
-      }
-      if (message.startsWith('SCRIPT_IMPORT_')) {
-        Alert.alert(
-          'Could not save script',
-          'The file could not be read or written to secure storage on this device. Try picking the file again.',
-        );
-        return;
-      }
-      Alert.alert('Import failed', 'Something went wrong. Try again.');
+      handleScriptImportFailure(e);
     } finally {
       setScriptImporting(false);
       setScriptImportPhase(null);
     }
+  };
+
+  const pickAndAttachScript = async () => {
+    try {
+      const picked = await DocumentPicker.getDocumentAsync({
+        copyToCacheDirectory: true,
+        type: ['text/plain', 'text/*'],
+      });
+      if (picked.canceled || !picked.assets?.length) {
+        return;
+      }
+      const asset = picked.assets[0];
+      const pickedName = asset.name ?? 'script.txt';
+      if (!isScreenplayTemplateFileName(pickedName)) {
+        Alert.alert('Wrong file type', WRONG_EXTENSION_MESSAGE);
+        return;
+      }
+
+      await runScriptImport(
+        (onPhase) =>
+          importScriptForProjectLocally(project.id, asset.uri, pickedName, 'text/plain', onPhase),
+        pickedName,
+      );
+    } catch (e) {
+      handleScriptImportFailure(e);
+    }
+  };
+
+  const pasteScriptFromClipboard = async () => {
+    try {
+      const hasString = await Clipboard.hasStringAsync();
+      if (!hasString) {
+        Alert.alert('Nothing to paste', 'Your clipboard does not contain text.');
+        return;
+      }
+      const text = await Clipboard.getStringAsync();
+      if (!text.trim()) {
+        Alert.alert('Nothing to paste', 'Your clipboard is empty.');
+        return;
+      }
+
+      await runScriptImport(
+        (onPhase) =>
+          importScriptTextForProjectLocally(
+            project.id,
+            text,
+            { sourceFilename: PASTED_SCREENPLAY_FILENAME, mimeType: 'text/plain' },
+            onPhase,
+          ),
+        PASTED_SCREENPLAY_FILENAME,
+      );
+    } catch (e) {
+      handleScriptImportFailure(e);
+    }
+  };
+
+  const importDroppedOrPastedText = (text: string, sourceFileName: string) => {
+    void runScriptImport(
+      (onPhase) =>
+        importScriptTextForProjectLocally(
+          project.id,
+          text,
+          { sourceFilename: sourceFileName, mimeType: 'text/plain' },
+          onPhase,
+        ),
+      sourceFileName,
+    );
   };
 
   const confirmUnarchive = () => {
@@ -247,7 +321,8 @@ export function ProjectDetailScreen({ navigation, route }: Props) {
             </>
           ) : (
             <Text style={styles.helper}>
-              Attach a .sp screenplay. Files stay only on this device; they are never sent to the server.
+              Add a plain-text screenplay (.txt) using the Assistant Director template. Files stay only on
+              this device; they are never sent to the server.
             </Text>
           )}
           {scriptImporting && scriptImportPhase ? (
@@ -257,11 +332,28 @@ export function ProjectDetailScreen({ navigation, route }: Props) {
             </View>
           ) : null}
           <PrimaryButton
-            label={scriptImporting ? 'Importing…' : 'Attach script'}
+            label={scriptImporting ? 'Importing…' : 'Choose .txt file'}
             variant="secondary"
             disabled={scriptImporting}
             onPress={() => void pickAndAttachScript()}
           />
+          <PrimaryButton
+            label={scriptImporting ? 'Importing…' : 'Paste from clipboard'}
+            variant="secondary"
+            disabled={scriptImporting}
+            onPress={() => void pasteScriptFromClipboard()}
+          />
+          {Platform.OS === 'web' ? (
+            <WebScriptDropZone
+              disabled={scriptImporting}
+              onAcceptedText={(text, name) => importDroppedOrPastedText(text, name)}
+              onRejectedNonTxt={() => Alert.alert('Wrong file type', WRONG_EXTENSION_MESSAGE)}
+            >
+              <Text style={styles.helper}>
+                Or drag and drop a .txt file here (web only). Use UTF-8 and the screenplay template format.
+              </Text>
+            </WebScriptDropZone>
+          ) : null}
         </View>
 
         {project.isArchived ? (

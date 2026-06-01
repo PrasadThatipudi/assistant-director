@@ -16,13 +16,13 @@ def validate_sp_bytes(*, filename: str | None, data: bytes) -> str:
     basename = Path(filename or "").name
     if not basename:
         raise SpScreenplayValidationError(
-            "Only .sp screenplay files are supported",
+            "Only .txt screenplay template files are supported",
             status_code=415,
         )
 
-    if Path(basename).suffix.lower() != ".sp":
+    if Path(basename).suffix.lower() != ".txt":
         raise SpScreenplayValidationError(
-            "Only .sp screenplay files are supported",
+            "Only .txt screenplay template files are supported",
             status_code=415,
         )
 

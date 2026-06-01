@@ -16,7 +16,7 @@ const PARSE_CODE_MESSAGES: Record<string, string> = {
 
 /** Shown when cached file cannot be read as screenplay text (no MIME or file paths). */
 export const CACHED_SCRIPT_NON_TEXT_PLACEHOLDER =
-  "This screenplay file can't be opened as text in the app. Try attaching an .sp file again from the project screen.";
+  "This screenplay file can't be opened as text in the app. Try attaching a .txt template file again from the project screen.";
 
 export function isNonTextScriptPlaceholder(body: string): boolean {
   return body === CACHED_SCRIPT_NON_TEXT_PLACEHOLDER;
@@ -37,7 +37,7 @@ export type AttachedScriptSummaryInput = {
 
 export function formatAttachedScriptSummary(meta: AttachedScriptSummaryInput): string {
   const versionPhrase = `Saved as version ${meta.version}`;
-  const formatPhrase = 'Assistant Director screenplay (.sp)';
+  const formatPhrase = 'Assistant Director screenplay template (.txt)';
   const name = meta.sourceFilename?.trim();
   if (name) {
     return `${name} · ${versionPhrase} · ${formatPhrase}`;

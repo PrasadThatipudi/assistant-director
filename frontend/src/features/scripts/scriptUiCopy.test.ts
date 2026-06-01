@@ -9,15 +9,15 @@ import {
 
 describe('formatAttachedScriptSummary', () => {
   it('includes filename, version phrase, and format when filename exists', () => {
-    const s = formatAttachedScriptSummary({ version: 2, sourceFilename: 'MyFilm.sp' });
-    expect(s).toContain('MyFilm.sp');
+    const s = formatAttachedScriptSummary({ version: 2, sourceFilename: 'MyFilm.txt' });
+    expect(s).toContain('MyFilm.txt');
     expect(s).toContain('Saved as version 2');
-    expect(s).toContain('Assistant Director screenplay (.sp)');
+    expect(s).toContain('Assistant Director screenplay template (.txt)');
   });
 
   it('omits filename when absent', () => {
     const s = formatAttachedScriptSummary({ version: 1, sourceFilename: null });
-    expect(s).toBe('Saved as version 1 · Assistant Director screenplay (.sp)');
+    expect(s).toBe('Saved as version 1 · Assistant Director screenplay template (.txt)');
   });
 });
 

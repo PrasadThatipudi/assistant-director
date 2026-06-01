@@ -1,6 +1,6 @@
 # sp-screenplay
 
-Pure-Python `.sp` screenplay validation and parsing for Assistant Director.
+Pure-Python validation and parsing for Assistant Director **plain-text screenplay templates** (UTF-8 `.txt` files that match the grammar in [`../GRAMMAR.md`](../GRAMMAR.md)).
 
 Install in editable mode from the repository root:
 

@@ -1,4 +1,6 @@
-# .sp screenplay grammar (MVP)
+# Screenplay template grammar (MVP)
+
+Plain-text files (conventionally **`.txt`**) follow this structure. The app does not rely on a proprietary extension; UTF-8 text that matches this grammar is accepted when saved as `.txt`.
 
 ## Document
 
