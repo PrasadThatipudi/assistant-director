@@ -1,5 +1,5 @@
 import type { DragEvent, ReactNode } from 'react';
-import { useCallback } from 'react';
+import { useCallback, useRef, useState } from 'react';
 
 import { theme } from '../../shell/theme';
 
@@ -11,6 +11,32 @@ type Props = {
 };
 
 export function WebScriptDropZone({ disabled, children, onAcceptedText, onRejectedNonTxt }: Props) {
+  const [isDragging, setIsDragging] = useState(false);
+  const depthRef = useRef(0);
+
+  const onDragEnter = useCallback(
+    (e: DragEvent<HTMLDivElement>) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (disabled) {
+        return;
+      }
+      depthRef.current += 1;
+      setIsDragging(true);
+    },
+    [disabled],
+  );
+
+  const onDragLeave = useCallback((e: DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    depthRef.current -= 1;
+    if (depthRef.current <= 0) {
+      depthRef.current = 0;
+      setIsDragging(false);
+    }
+  }, []);
+
   const onDragOver = useCallback((e: DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     e.stopPropagation();
@@ -20,6 +46,8 @@ export function WebScriptDropZone({ disabled, children, onAcceptedText, onReject
     async (e: DragEvent<HTMLDivElement>) => {
       e.preventDefault();
       e.stopPropagation();
+      depthRef.current = 0;
+      setIsDragging(false);
       if (disabled) {
         return;
       }
@@ -40,15 +68,16 @@ export function WebScriptDropZone({ disabled, children, onAcceptedText, onReject
 
   return (
     <div
+      onDragEnter={onDragEnter}
+      onDragLeave={onDragLeave}
       onDragOver={onDragOver}
       onDrop={(ev) => void onDrop(ev)}
       style={{
-        borderWidth: 1,
-        borderStyle: 'dashed',
-        borderColor: theme.borderLight,
-        borderRadius: 8,
-        padding: 12,
-        marginTop: 8,
+        width: '100%',
+        borderRadius: theme.radiusMd,
+        outline: isDragging ? `2px dashed ${theme.primaryAction}` : '2px solid transparent',
+        outlineOffset: 2,
+        transition: 'outline-color 0.12s ease',
       }}
     >
       {children}

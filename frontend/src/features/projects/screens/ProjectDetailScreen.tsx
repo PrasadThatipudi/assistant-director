@@ -27,6 +27,7 @@ import {
   type LocalScriptAttachment,
   type ScriptImportPhase,
 } from '../../scripts';
+import { ScriptImportEmptyCard } from '../../scripts/ScriptImportEmptyCard';
 import { WebScriptDropZone } from '../../scripts/WebScriptDropZone';
 import { formatAttachedScriptSummary } from '../../scripts/scriptUiCopy';
 import { getApiBaseUrl } from '../../../shared/lib/env';
@@ -319,41 +320,31 @@ export function ProjectDetailScreen({ navigation, route }: Props) {
                 onPress={() => navigation.navigate('ScriptReader', { projectId: project.id })}
               />
             </>
-          ) : (
-            <Text style={styles.helper}>
-              Add a plain-text screenplay (.txt) using the Assistant Director template. Files stay only on
-              this device; they are never sent to the server.
-            </Text>
-          )}
-          {scriptImporting && scriptImportPhase ? (
-            <View style={styles.uploadingRow}>
-              <ActivityIndicator color={theme.primaryAction} size="small" />
-              <Text style={styles.uploadingText}>{importPhaseLabel(scriptImportPhase)}</Text>
-            </View>
-          ) : null}
-          <PrimaryButton
-            label={scriptImporting ? 'Importing…' : 'Choose .txt file'}
-            variant="secondary"
-            disabled={scriptImporting}
-            onPress={() => void pickAndAttachScript()}
-          />
-          <PrimaryButton
-            label={scriptImporting ? 'Importing…' : 'Paste from clipboard'}
-            variant="secondary"
-            disabled={scriptImporting}
-            onPress={() => void pasteScriptFromClipboard()}
-          />
-          {Platform.OS === 'web' ? (
+          ) : Platform.OS === 'web' ? (
             <WebScriptDropZone
               disabled={scriptImporting}
               onAcceptedText={(text, name) => importDroppedOrPastedText(text, name)}
               onRejectedNonTxt={() => Alert.alert('Wrong file type', WRONG_EXTENSION_MESSAGE)}
             >
-              <Text style={styles.helper}>
-                Or drag and drop a .txt file here (web only). Use UTF-8 and the screenplay template format.
-              </Text>
+              <ScriptImportEmptyCard
+                disabled={scriptImporting}
+                importStatusText={
+                  scriptImporting && scriptImportPhase ? importPhaseLabel(scriptImportPhase) : null
+                }
+                onChooseFile={pickAndAttachScript}
+                onPaste={pasteScriptFromClipboard}
+              />
             </WebScriptDropZone>
-          ) : null}
+          ) : (
+            <ScriptImportEmptyCard
+              disabled={scriptImporting}
+              importStatusText={
+                scriptImporting && scriptImportPhase ? importPhaseLabel(scriptImportPhase) : null
+              }
+              onChooseFile={pickAndAttachScript}
+              onPaste={pasteScriptFromClipboard}
+            />
+          )}
         </View>
 
         {project.isArchived ? (
@@ -408,21 +399,6 @@ const styles = StyleSheet.create({
     borderColor: theme.border,
     paddingTop: theme.spacingMd,
     gap: theme.spacingSm,
-  },
-  helper: {
-    fontSize: 14,
-    color: theme.textSecondary,
-    lineHeight: 20,
-  },
-  uploadingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: theme.spacingSm,
-    paddingVertical: theme.spacingXs,
-  },
-  uploadingText: {
-    fontSize: 14,
-    color: theme.textSecondary,
   },
   expoGoBanner: {
     backgroundColor: theme.canvas,

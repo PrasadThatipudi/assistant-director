@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { Fragment } from 'react';
 
 type Props = {
   disabled: boolean;
@@ -7,6 +8,6 @@ type Props = {
   onRejectedNonTxt?: () => void;
 };
 
-export function WebScriptDropZone(_props: Props): null {
-  return null;
+export function WebScriptDropZone({ children }: Props): ReactNode {
+  return <Fragment>{children}</Fragment>;
 }
